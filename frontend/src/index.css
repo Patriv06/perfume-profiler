@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Montserrat:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cinzel", Georgia, serif;
+  --font-sans: "Montserrat", sans-serif;
+  
+  --color-gold-50: #FAF6EE;
+  --color-gold-100: #F3EAD5;
+  --color-gold-200: #E6D4AA;
+  --color-gold-300: #D6BC7E;
+  --color-gold-400: #C5A154;
+  --color-gold-500: #A88439;
+  --color-gold-600: #8E6D2D;
+  --color-gold-700: #6C5120;
+  --color-gold-800: #4B3816;
+  --color-gold-900: #30240E;
+  --color-gold-950: #1B1407;
+  
+  --color-luxury-black: #0B0B0C;
+  --color-luxury-dark: #121214;
+  --color-luxury-gray: #1E1E22;
+}
+
+/* Custom background animation and scrollbar styles */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-luxury-black);
+  color: #F3F4F6;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-luxury-black);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-gold-800);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gold-600);
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(18, 18, 20, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(197, 161, 84, 0.15);
+}
+
+.glass-panel-hover {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-hover:hover {
+  background: rgba(18, 18, 20, 0.85);
+  border-color: rgba(197, 161, 84, 0.4);
+  box-shadow: 0 0 25px rgba(197, 161, 84, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Gold text gradient */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #FAF6EE 0%, #D6BC7E 50%, #A88439 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Custom slide transitions */
+.fade-in-slide {
+  animation: fadeInSlide 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

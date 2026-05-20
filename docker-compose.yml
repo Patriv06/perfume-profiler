@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: perfume-profiler-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATABASE_PATH=/data/perfumes.db
+      - TIENDANUBE_STORE_ID=${TIENDANUBE_STORE_ID:-}
+      - TIENDANUBE_ACCESS_TOKEN=${TIENDANUBE_ACCESS_TOKEN:-}
+      - TIENDANUBE_STORE_URL=${TIENDANUBE_STORE_URL:-https://tienda-simulada.mitiendanube.com}
+      - TIENDANUBE_USER_AGENT=${TIENDANUBE_USER_AGENT:-PerfumeProfilerApp (perfumes@example.com)}
+    volumes:
+      - backend-db:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: perfume-profiler-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-db:
