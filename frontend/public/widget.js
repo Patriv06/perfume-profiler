@@ -214,17 +214,48 @@
       closeModal();
     }
   });
-
   // Handle messages from the widget iframe
   window.addEventListener('message', function(event) {
     // Security check: verify the origin matches the App URL
     if (event.origin !== APP_URL) return;
 
     if (event.data && typeof event.data === 'object') {
-      const { type, url } = event.data;
+      const { type, url, productId, variantId } = event.data;
 
-      if (type === 'add_to_cart' || type === 'view_product') {
-        // Redirection of top page to Tiendanube cart or product detail
+      if (type === 'add_to_cart') {
+        // If we are in live mode (we have a valid Tiendanube product ID), we submit a POST to /comprar/
+        if (productId && !isNaN(productId)) {
+          closeModal();
+          
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = '/comprar/';
+          
+          const prodInput = document.createElement('input');
+          prodInput.type = 'hidden';
+          prodInput.name = 'add_to_cart';
+          prodInput.value = productId;
+          form.appendChild(prodInput);
+          
+          if (variantId) {
+            const varInput = document.createElement('input');
+            varInput.type = 'hidden';
+            varInput.name = 'variant_id';
+            varInput.value = variantId;
+            form.appendChild(varInput);
+          }
+          
+          document.body.appendChild(form);
+          form.submit();
+        } else {
+          // Fallback to GET redirection (e.g. for mock mode or if productId is missing)
+          if (url) {
+            closeModal();
+            window.location.href = url;
+          }
+        }
+      } else if (type === 'view_product') {
+        // Redirection of top page to Tiendanube product detail
         if (url) {
           closeModal();
           window.location.href = url;
@@ -232,4 +263,5 @@
       }
     }
   });
+
 })();

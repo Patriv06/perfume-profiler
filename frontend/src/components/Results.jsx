@@ -14,7 +14,12 @@ export default function Results({ recommendation, checkoutUrl, productUrl, onRes
   const handleAddToCart = (e) => {
     if (isWidget) {
       e.preventDefault();
-      window.parent.postMessage({ type: 'add_to_cart', url: checkoutUrl }, '*');
+      window.parent.postMessage({ 
+        type: 'add_to_cart', 
+        url: checkoutUrl,
+        productId: recommendation.tiendanube_id,
+        variantId: recommendation.variant_id
+      }, '*');
     }
   };
 
