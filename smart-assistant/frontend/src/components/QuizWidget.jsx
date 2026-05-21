@@ -159,6 +159,64 @@ const LOCAL_PRODUCTS = {
       canonical_url: 'https://asistente.quanticia.com.ar/',
       tags: { tostado: 'medio', preparacion: 'con_leche' }
     }
+  ],
+  comidas: [
+    {
+      id: 'com1',
+      name: 'Ensalada Quinoa & Palta Vegana 🌱',
+      price: 9500,
+      description: 'Ensalada fresca y nutritiva de quinoa orgánica, palta hass, tomates cherry, hojas de espinaca y aderezo cítrico. 100% de origen vegetal.',
+      image_url: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&q=80&w=400',
+      canonical_url: 'https://asistente.quanticia.com.ar/',
+      tags: { dieta: 'vegana', tipo_plato: 'ligero' }
+    },
+    {
+      id: 'com2',
+      name: 'Ñoquis de Papa Sin Gluten 🌾',
+      price: 11200,
+      description: 'Ñoquis de papa artesanales elaborados con harina certificada libre de gluten, acompañados de salsa pomodoro y albahaca fresca.',
+      image_url: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&q=80&w=400',
+      canonical_url: 'https://asistente.quanticia.com.ar/',
+      tags: { dieta: 'sin_gluten', tipo_plato: 'caliente' }
+    },
+    {
+      id: 'com3',
+      name: 'Volcán de Chocolate Vegano & Sin Gluten 🍫',
+      price: 8900,
+      description: 'Postre tibio con centro de chocolate fundido, libre de gluten y leche. Acompañado de una salsa fina de frutos rojos del bosque.',
+      image_url: 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&q=80&w=400',
+      canonical_url: 'https://asistente.quanticia.com.ar/',
+      tags: { dieta: 'vegana', tipo_plato: 'dulce' }
+    }
+  ],
+  generico: [
+    {
+      id: 'gen1',
+      name: 'Auriculares Inalámbricos Premium 🎧',
+      price: 24999,
+      description: 'Sonido de alta fidelidad, cancelación activa de ruido (ANC) y batería de hasta 40 horas. Ideal para tu día a día o estudio.',
+      image_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=400',
+      canonical_url: 'https://asistente.quanticia.com.ar/',
+      tags: { uso: 'trabajo', prioridad: 'premium' }
+    },
+    {
+      id: 'gen2',
+      name: 'Mochila Urbana Ergonómica 🎒',
+      price: 14500,
+      description: 'Mochila resistente al agua con compartimento acolchado para notebook y bolsillos organizadores. Excelente relación precio-calidad.',
+      image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&q=80&w=400',
+      canonical_url: 'https://asistente.quanticia.com.ar/',
+      tags: { uso: 'ocio', prioridad: 'precio' }
+    },
+    {
+      id: 'gen3',
+      name: 'Reloj Inteligente Fit Track ⌚',
+      price: 18900,
+      description: 'Monitoreo de actividad física, ritmo cardíaco y notificaciones en pantalla a color. Un compañero excelente para el ocio.',
+      image_url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=400',
+      canonical_url: 'https://asistente.quanticia.com.ar/',
+      tags: { uso: 'ocio', prioridad: 'premium' }
+    }
   ]
 };
 
@@ -172,25 +230,79 @@ const getCategoryDetails = (category) => {
       return { badge: '👕 Outfit Recomendado', logo: '👕' };
     case 'cafe':
       return { badge: '☕ Café Recomendado', logo: '☕' };
+    case 'comidas':
+      return { badge: '🍽️ Plato Recomendado', logo: '🍽️' };
+    case 'generico':
+      return { badge: '🎁 Recomendación Exclusiva', logo: '🎁' };
     case 'vinos':
     default:
       return { badge: '🍷 Recomendación Ideal', logo: '🍷' };
   }
 };
 
-const calculateRecommendationLocal = (category, answers) => {
-  const products = LOCAL_PRODUCTS[category] || LOCAL_PRODUCTS.vinos;
-  const scored = products.map(prod => {
-    let score = 0;
-    Object.keys(answers).forEach(key => {
-      if (prod.tags[key] === answers[key]) {
-        score += 1;
+const calculateRecommendationLocal = (category, answers, questions = []) => {
+  const products = LOCAL_PRODUCTS[category] || [];
+  let bestProd = null;
+  let bestScore = -1;
+
+  if (products.length > 0) {
+    products.forEach(prod => {
+      let score = 0;
+      Object.keys(answers).forEach(key => {
+        if (prod.tags && prod.tags[key] === answers[key]) {
+          score += 1;
+        }
+      });
+      if (score > bestScore) {
+        bestScore = score;
+        bestProd = prod;
       }
     });
-    return { ...prod, score };
-  });
-  scored.sort((a, b) => b.score - a.score);
-  return scored[0];
+  }
+
+  // If no product found or maximum match score is 0, generate a fallback
+  if (!bestProd || bestScore === 0) {
+    const choices = [];
+    if (questions && Array.isArray(questions)) {
+      questions.forEach(q => {
+        const val = answers[q.tag_key];
+        if (val) {
+          const opt = q.options?.find(o => o.value === val);
+          if (opt) choices.push(opt.text || val);
+        }
+      });
+    }
+
+    const choicesStr = choices.join(' + ');
+    
+    let fallbackName = 'Producto Recomendado Especial 🎁';
+    let fallbackDesc = 'Hemos diseñado esta recomendación exclusiva adaptada a tus respuestas y preferencias.';
+    let fallbackImg = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&q=80&w=400';
+    let fallbackPrice = 12500;
+
+    if (category === 'comidas') {
+      fallbackName = 'Menú Combinado Especial 🍽️';
+      fallbackDesc = 'Un plato preparado artesanalmente y adaptado a tus gustos culinarios.';
+      fallbackImg = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400';
+      fallbackPrice = 9800;
+    }
+
+    if (choices.length > 0) {
+      fallbackDesc += ` (Elegiste: ${choicesStr})`;
+    }
+
+    bestProd = {
+      id: 'fallback-dynamic',
+      name: fallbackName,
+      price: fallbackPrice,
+      description: fallbackDesc,
+      image_url: fallbackImg,
+      canonical_url: 'https://asistente.quanticia.com.ar/',
+      tags: {}
+    };
+  }
+
+  return bestProd;
 };
 
 const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAddToCartSimulated = null }) => {
@@ -270,7 +382,7 @@ const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAdd
       
       if (isPlayground) {
         setTimeout(() => {
-          const recProd = calculateRecommendationLocal(activeConfig.category, updatedAnswers);
+          const recProd = calculateRecommendationLocal(activeConfig.category, updatedAnswers, activeConfig.questions);
           setRecommendation({ recommendation: recProd });
           setLoadingRecommendation(false);
         }, 1200);
