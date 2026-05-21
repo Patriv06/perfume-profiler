@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* Default global tokens */
+  --font-title: 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  
+  --admin-bg: #0d0f12;
+  --admin-card-bg: #14181f;
+  --admin-border: #212836;
+  --admin-text-primary: #f3f4f6;
+  --admin-text-secondary: #9ca3af;
+  --admin-accent: #3b82f6;
+  --admin-accent-hover: #2563eb;
+  
+  /* Widget customizable variables (fallback values) */
+  --widget-accent: #722F37;
+  --widget-bg: #1A1112;
+  --widget-text: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  background-color: var(--admin-bg);
+  color: var(--admin-text-primary);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.pulse-text {
+  animation: pulse 1.5s infinite ease-in-out;
+}

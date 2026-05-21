@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smart-assistant-backend
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+      - DATABASE_PATH=/data/smart_assistant.db
+      - TIENDANUBE_CLIENT_ID=${TIENDANUBE_CLIENT_ID:-}
+      - TIENDANUBE_CLIENT_SECRET=${TIENDANUBE_CLIENT_SECRET:-}
+      - TIENDANUBE_APP_NAME=${TIENDANUBE_APP_NAME:-SmartShoppingAssistant}
+    volumes:
+      - backend-db:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smart-assistant-frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-db:
