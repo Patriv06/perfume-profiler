@@ -10,14 +10,20 @@ export default function App() {
   const [answers, setAnswers] = useState({ gender: '', moment: '', note: '' });
   const [recommendation, setRecommendation] = useState(null);
   const [checkoutUrl, setCheckoutUrl] = useState('');
+  const [productUrl, setProductUrl] = useState('');
   const [config, setConfig] = useState({ mode: 'mock', storeUrl: '' });
   const [error, setError] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
+  const [isWidget, setIsWidget] = useState(false);
 
   // Fetch configuration on load
   useEffect(() => {
     fetchConfig();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('widget') === 'true') {
+      setIsWidget(true);
+    }
   }, []);
 
   const fetchConfig = async () => {
@@ -72,6 +78,7 @@ export default function App() {
     setAnswers({ gender: '', moment: '', note: '' });
     setRecommendation(null);
     setCheckoutUrl('');
+    setProductUrl('');
     setError(null);
   };
 
@@ -113,6 +120,7 @@ export default function App() {
       setTimeout(() => {
         setRecommendation(data.recommendation);
         setCheckoutUrl(data.checkoutUrl);
+        setProductUrl(data.productUrl);
         setStep('results');
       }, delay);
 
@@ -128,6 +136,7 @@ export default function App() {
     setAnswers({ gender: '', moment: '', note: '' });
     setRecommendation(null);
     setCheckoutUrl('');
+    setProductUrl('');
     setError(null);
   };
 
@@ -190,8 +199,10 @@ export default function App() {
             <Results 
               recommendation={recommendation}
               checkoutUrl={checkoutUrl}
+              productUrl={productUrl}
               onReset={handleReset}
               mode={config.mode}
+              isWidget={isWidget}
             />
           )}
 
@@ -199,43 +210,45 @@ export default function App() {
       </main>
 
       {/* Embedded/Dockploy Status Dashboard (Footer) */}
-      <footer className="w-full border-t border-white/5 py-4 bg-luxury-dark/90 relative z-20">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] md:text-xs text-gray-500 font-light">
-          
-          {/* Status Indicators */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${config.mode === 'live' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
-              <span>
-                Backend: <strong className="font-medium text-gray-400">{config.mode === 'live' ? 'Conectado a Tiendanube' : 'Modo Simulado'}</strong>
-              </span>
-            </div>
-            {config.storeUrl && (
-              <div className="hidden sm:inline-flex items-center gap-1">
-                <Info className="w-3.5 h-3.5 text-gray-600" />
-                <span className="truncate max-w-[200px]" title={config.storeUrl}>
-                  Tienda: <a href={config.storeUrl} target="_blank" rel="noopener noreferrer" className="hover:text-gold-400 underline">{config.storeUrl}</a>
+      {!isWidget && (
+        <footer className="w-full border-t border-white/5 py-4 bg-luxury-dark/90 relative z-20">
+          <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] md:text-xs text-gray-500 font-light">
+            
+            {/* Status Indicators */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${config.mode === 'live' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></span>
+                <span>
+                  Backend: <strong className="font-medium text-gray-400">{config.mode === 'live' ? 'Conectado a Tiendanube' : 'Modo Simulado'}</strong>
                 </span>
               </div>
-            )}
-          </div>
+              {config.storeUrl && (
+                <div className="hidden sm:inline-flex items-center gap-1">
+                  <Info className="w-3.5 h-3.5 text-gray-600" />
+                  <span className="truncate max-w-[200px]" title={config.storeUrl}>
+                    Tienda: <a href={config.storeUrl} target="_blank" rel="noopener noreferrer" className="hover:text-gold-400 underline">{config.storeUrl}</a>
+                  </span>
+                </div>
+              )}
+            </div>
 
-          {/* Quick Actions (Syncing & Testing) */}
-          <div className="flex items-center gap-3">
-            <button
-              id="btn-sync-tiendanube"
-              onClick={handleSyncProducts}
-              disabled={syncing}
-              className="px-3 py-1 bg-white/5 hover:bg-gold-400 hover:text-luxury-black text-gray-400 rounded border border-white/5 hover:border-gold-300 transition-all duration-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Sincronizando...' : 'Generar Productos de Prueba'}
-            </button>
-            <span className="text-[10px] text-gray-600">v1.0.0</span>
-          </div>
+            {/* Quick Actions (Syncing & Testing) */}
+            <div className="flex items-center gap-3">
+              <button
+                id="btn-sync-tiendanube"
+                onClick={handleSyncProducts}
+                disabled={syncing}
+                className="px-3 py-1 bg-white/5 hover:bg-gold-400 hover:text-luxury-black text-gray-400 rounded border border-white/5 hover:border-gold-300 transition-all duration-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Sincronizando...' : 'Generar Productos de Prueba'}
+              </button>
+              <span className="text-[10px] text-gray-600">v1.0.0</span>
+            </div>
 
-        </div>
-      </footer>
+          </div>
+        </footer>
+      )}
 
     </div>
   );

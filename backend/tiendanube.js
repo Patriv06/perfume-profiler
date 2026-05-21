@@ -34,13 +34,14 @@ const setupTestProducts = async () => {
       // Create mock ids
       const mockProductId = `mock-tiendanube-prod-${prod.id}`;
       const mockVariantId = `12345678${prod.id}`; // 9-digit variant ID similar to Tiendanube format
+      const mockCanonicalUrl = `https://tienda-simulada.mitiendanube.com/productos/mock-${prod.sku.toLowerCase()}`;
       
       await dbRun(
-        'UPDATE products SET tiendanube_id = ?, variant_id = ? WHERE id = ?',
-        [mockProductId, mockVariantId, prod.id]
+        'UPDATE products SET tiendanube_id = ?, variant_id = ?, canonical_url = ? WHERE id = ?',
+        [mockProductId, mockVariantId, mockCanonicalUrl, prod.id]
       );
       
-      console.log(`[SIMULATED] Product "${prod.name}" updated with variant_id: ${mockVariantId}`);
+      console.log(`[SIMULATED] Product "${prod.name}" updated with variant_id: ${mockVariantId}, URL: ${mockCanonicalUrl}`);
     }
     
     return {
@@ -88,17 +89,18 @@ const setupTestProducts = async () => {
       const tiendanubeId = responseData.id;
       // Get the variant_id of the first variant
       const variantId = responseData.variants && responseData.variants[0] ? responseData.variants[0].id : null;
+      const canonicalUrl = responseData.canonical_url || '';
       
       if (!variantId) {
         throw new Error(`Product response did not include a valid variant_id.`);
       }
 
       await dbRun(
-        'UPDATE products SET tiendanube_id = ?, variant_id = ? WHERE id = ?',
-        [String(tiendanubeId), String(variantId), prod.id]
+        'UPDATE products SET tiendanube_id = ?, variant_id = ?, canonical_url = ? WHERE id = ?',
+        [String(tiendanubeId), String(variantId), String(canonicalUrl), prod.id]
       );
 
-      console.log(`[LIVE] Product "${prod.name}" created successfully. Tiendanube ID: ${tiendanubeId}, Variant ID: ${variantId}`);
+      console.log(`[LIVE] Product "${prod.name}" created successfully. Tiendanube ID: ${tiendanubeId}, Variant ID: ${variantId}, URL: ${canonicalUrl}`);
       createdProducts.push({ name: prod.name, tiendanubeId, variantId });
 
       // Optional: upload product image to Tiendanube if we have it

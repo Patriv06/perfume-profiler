@@ -1,7 +1,7 @@
 import React from 'react';
 import { ShoppingBag, RotateCcw, Sparkles, Check } from 'lucide-react';
 
-export default function Results({ recommendation, checkoutUrl, onReset, mode }) {
+export default function Results({ recommendation, checkoutUrl, productUrl, onReset, mode, isWidget }) {
   if (!recommendation) return null;
 
   // Format price in ARS local style
@@ -10,6 +10,20 @@ export default function Results({ recommendation, checkoutUrl, onReset, mode }) 
     currency: 'ARS',
     minimumFractionDigits: 0
   }).format(parseFloat(recommendation.price));
+
+  const handleAddToCart = (e) => {
+    if (isWidget) {
+      e.preventDefault();
+      window.parent.postMessage({ type: 'add_to_cart', url: checkoutUrl }, '*');
+    }
+  };
+
+  const handleViewProduct = (e) => {
+    if (isWidget) {
+      e.preventDefault();
+      window.parent.postMessage({ type: 'view_product', url: productUrl }, '*');
+    }
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8 fade-in-slide" id="results-screen">
@@ -104,17 +118,32 @@ export default function Results({ recommendation, checkoutUrl, onReset, mode }) 
               </div>
             </div>
 
-            {/* Checkout Action Button */}
-            <a
-              id="btn-add-to-cart"
-              href={checkoutUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-gold-500 to-gold-300 text-luxury-black font-semibold text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all duration-300 hover:shadow-[0_0_20px_rgba(197,161,84,0.35)] hover:scale-[1.02] cursor-pointer"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              Agregar al Carrito
-            </a>
+            {/* Action Buttons Container */}
+            <div className="flex flex-col sm:flex-row gap-4 w-full">
+              <a
+                id="btn-add-to-cart"
+                href={checkoutUrl}
+                target={isWidget ? "_self" : "_blank"}
+                onClick={handleAddToCart}
+                rel="noopener noreferrer"
+                className="notranslate flex-grow px-6 py-4 bg-gradient-to-r from-gold-500 to-gold-300 text-luxury-black font-semibold text-xs uppercase tracking-[0.15em] flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-[0_0_20px_rgba(197,161,84,0.35)] hover:scale-[1.02] cursor-pointer"
+                translate="no"
+              >
+                <ShoppingBag className="w-4 h-4" />
+                Agregar al Carrito
+              </a>
+              <a
+                id="btn-view-details"
+                href={productUrl}
+                target={isWidget ? "_self" : "_blank"}
+                onClick={handleViewProduct}
+                rel="noopener noreferrer"
+                className="notranslate flex-grow px-6 py-4 border border-gold-400/50 text-gold-300 hover:text-white font-semibold text-xs uppercase tracking-[0.15em] flex items-center justify-center gap-2 transition-all duration-300 hover:bg-gold-400/10 hover:border-gold-300 hover:scale-[1.02] cursor-pointer"
+                translate="no"
+              >
+                Ver Producto
+              </a>
+            </div>
           </div>
 
         </div>

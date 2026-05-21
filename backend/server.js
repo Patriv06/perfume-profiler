@@ -119,10 +119,14 @@ app.get('/api/recommend', async (req, res) => {
     // Clean trailing slashes from storeUrl
     const cleanStoreUrl = storeUrl.replace(/\/+$/, '');
     const checkoutUrl = `${cleanStoreUrl}/cart/add/?variant_id=${recommendedProduct.variant_id}`;
+    
+    // Use stored canonical_url or generate fallback
+    const productUrl = recommendedProduct.canonical_url || `${cleanStoreUrl}/productos/${recommendedProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
     res.json({
       recommendation: recommendedProduct,
       checkoutUrl,
+      productUrl,
       debug: scoredProducts.map(p => ({ id: p.id, name: p.name, score: p.score }))
     });
 

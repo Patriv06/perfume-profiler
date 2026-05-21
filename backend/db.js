@@ -90,6 +90,7 @@ const initDatabase = async () => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         tiendanube_id TEXT,
         variant_id TEXT,
+        canonical_url TEXT,
         name TEXT NOT NULL,
         description TEXT,
         gender TEXT CHECK(gender IN ('Hombre', 'Mujer', 'Unisex')),
@@ -101,14 +102,23 @@ const initDatabase = async () => {
       )
     `);
 
+    // Dynamic schema migration: check if canonical_url column exists (for already created databases)
+    const tableInfo = await dbAll("PRAGMA table_info(products)");
+    const hasCanonicalUrl = tableInfo.some(column => column.name === 'canonical_url');
+    if (!hasCanonicalUrl) {
+      console.log('Migration: Adding canonical_url column to products table...');
+      await dbRun("ALTER TABLE products ADD COLUMN canonical_url TEXT");
+    }
+
     // Check if products table is empty
     const rows = await dbAll('SELECT COUNT(*) as count FROM products');
     if (rows[0].count === 0) {
       console.log('Seeding initial products into database...');
       for (const prod of initialProducts) {
+        const mockCanonicalUrl = `https://tienda-simulada.mitiendanube.com/productos/mock-${prod.sku.toLowerCase()}`;
         await dbRun(
-          `INSERT INTO products (name, description, gender, moment, note, image_url, price, sku, variant_id) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO products (name, description, gender, moment, note, image_url, price, sku, variant_id, canonical_url) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             prod.name,
             prod.description,
@@ -119,7 +129,8 @@ const initDatabase = async () => {
             prod.price,
             prod.sku,
             // Pre-populate a fake variant_id in case Tiendanube API is not used/configured
-            `mock-variant-${prod.sku.toLowerCase()}`
+            `mock-variant-${prod.sku.toLowerCase()}`,
+            mockCanonicalUrl
           ]
         );
       }
