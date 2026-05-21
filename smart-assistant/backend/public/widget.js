@@ -34,6 +34,8 @@
     frontendHost = 'http://localhost:5173'; // Vite dev server port
   } else if (backendHost.includes('127.0.0.1:5001')) {
     frontendHost = 'http://127.0.0.1:5173';
+  } else if (backendHost.includes('asistente-api.quanticia.com.ar')) {
+    frontendHost = 'https://asistente.quanticia.com.ar';
   }
 
   // 2. Inject Styles for floating widget

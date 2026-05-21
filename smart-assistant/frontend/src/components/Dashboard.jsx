@@ -5,6 +5,9 @@ const getApiUrl = () => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://localhost:5001';
   }
+  if (window.location.hostname === 'asistente.quanticia.com.ar') {
+    return 'https://asistente-api.quanticia.com.ar';
+  }
   return window.location.origin
     .replace(':8081', ':5001')
     .replace(':8080', ':5000')
