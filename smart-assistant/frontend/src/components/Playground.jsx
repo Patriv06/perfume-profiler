@@ -614,6 +614,35 @@ const Playground = () => {
             </div>
           </div>
 
+          <div className="panel-section">
+            <h2>5. Guía de Integración Real</h2>
+            <p className="section-desc">Cómo conectar esta solución con tu tienda real de Tiendanube en producción de forma automática.</p>
+            
+            <div className="installation-guide-box">
+              <div className="guide-item">
+                <div className="guide-icon">🔌</div>
+                <div className="guide-text">
+                  <strong>Paso 1: Instalación de la App</strong>
+                  <p>El cliente ingresa a tu tienda de aplicaciones y hace clic en <em>"Instalar"</em>. Esto inicia el flujo seguro de OAuth en nuestro callback.</p>
+                </div>
+              </div>
+              <div className="guide-item">
+                <div className="guide-icon">🔑</div>
+                <div className="guide-text">
+                  <strong>Paso 2: Permisos Automáticos</strong>
+                  <p>La tienda le solicita autorización para leer productos (<code>read_products</code>) y cargar scripts (<code>write_scripts</code>).</p>
+                </div>
+              </div>
+              <div className="guide-item">
+                <div className="guide-icon">🎯</div>
+                <div className="guide-text">
+                  <strong>Paso 3: Sincronización y Script</strong>
+                  <p>Obtenemos su dominio principal y productos. Luego, inyectamos automáticamente el script cargador (<code>widget.js</code>). ¡Sin editar código HTML!</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="panel-footer">
             <button className="reset-demo-btn" onClick={handleResetWidget}>
               Reiniciar Simulación ↺
