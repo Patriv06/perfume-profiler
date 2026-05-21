@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import QuizWidget from './components/QuizWidget';
+import Playground from './components/Playground';
 import './App.css';
 
 function App() {
-  const [view, setView] = useState('admin');
+  const [view, setView] = useState('playground');
   const [storeId, setStoreId] = useState(null);
 
   useEffect(() => {
@@ -16,9 +17,11 @@ function App() {
     const pathIsWidget = window.location.pathname.includes('/widget');
     const viewParam = params.get('view');
     
-    let currentView = 'admin';
+    let currentView = 'playground';
     if (viewParam === 'widget' || pathIsWidget) {
       currentView = 'widget';
+    } else if (storeIdParam) {
+      currentView = 'admin';
     }
 
     setView(currentView);
@@ -30,14 +33,15 @@ function App() {
     } else if (currentView === 'widget') {
       // Fallback for widget demo if no store_id is given
       setStoreId('9999999'); // Wines demo
-    } else {
-      // Default to perfumes demo for admin dashboard if none specified
-      setStoreId('7732051');
     }
   }, []);
 
   if (view === 'widget') {
     return <QuizWidget storeId={storeId} />;
+  }
+
+  if (view === 'playground') {
+    return <Playground />;
   }
 
   return <Dashboard storeId={storeId} />;
