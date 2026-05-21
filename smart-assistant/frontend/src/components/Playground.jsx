@@ -615,7 +615,45 @@ const Playground = () => {
           </div>
 
           <div className="panel-section">
-            <h2>5. Guía de Integración Real</h2>
+            <h2>5. Guía: ¿Cómo funciona el Recomendador?</h2>
+            <p className="section-desc">Entendé cómo conectar tus preguntas con los productos recomendados de tu tienda.</p>
+            
+            <div className="recommendation-logic-box">
+              <p className="logic-intro">El asistente utiliza un <strong>sistema de puntos</strong> acumulativos basado en etiquetas (tags):</p>
+              
+              <div className="logic-step">
+                <span className="logic-icon">🔑</span>
+                <div className="logic-text">
+                  <strong>1. Las Preguntas definen Claves</strong>
+                  <p>Cada pregunta tiene una <strong>Propiedad</strong> (ej: <code>dieta</code> o <code>sabor</code>). Los productos deben tener etiquetas con esta misma clave.</p>
+                </div>
+              </div>
+
+              <div className="logic-step">
+                <span className="logic-icon">🏷️</span>
+                <div className="logic-text">
+                  <strong>2. Las Respuestas definen Valores</strong>
+                  <p>Cada opción tiene un <strong>Valor de Tag</strong> (ej: <code>vegana</code> o <code>tinto</code>). Si el cliente la elige, el asistente buscará productos con esa etiqueta.</p>
+                </div>
+              </div>
+
+              <div className="logic-step">
+                <span className="logic-icon">📈</span>
+                <div className="logic-text">
+                  <strong>3. Sistema de Puntuación Cruzada</strong>
+                  <p>Cada respuesta coincidente suma <strong>+1 punto</strong> a ese producto. Al finalizar, el producto con <strong>mayor puntaje</strong> es recomendado.</p>
+                </div>
+              </div>
+
+              <div className="logic-example-card">
+                <strong>💡 Ejemplo Práctico:</strong>
+                <p>Si creas la pregunta <em>"¿Qué plato preferís?"</em> con propiedad <code>plato</code> y la opción <em>"Ensalada 🥗"</em> con valor <code>ligero</code>, para que el sistema recomiende una ensalada de quinoa deberás ir a la matriz de productos y asignarle la etiqueta <code>plato: ligero</code>.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel-section">
+            <h2>6. Guía de Integración Real</h2>
             <p className="section-desc">Cómo conectar esta solución con tu tienda real de Tiendanube en producción de forma automática.</p>
             
             <div className="installation-guide-box">

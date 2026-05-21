@@ -24,6 +24,7 @@ const Dashboard = ({ storeId }) => {
   const [saveMessage, setSaveMessage] = useState('');
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showGuide, setShowGuide] = useState(true);
 
   // Form states
   const [category, setCategory] = useState('vinos');
@@ -425,6 +426,43 @@ const Dashboard = ({ storeId }) => {
               )}
             </button>
           </div>
+        </div>
+
+        <div className="recommendation-guide-banner">
+          <div className="guide-banner-header" onClick={() => setShowGuide(!showGuide)} style={{ cursor: 'pointer' }}>
+            <span>💡 Guía rápida: ¿Cómo aprende el asistente a recomendar tus productos?</span>
+            <span className="toggle-guide-icon">{showGuide ? '▲ Colapsar' : '▼ Expandir'}</span>
+          </div>
+          {showGuide && (
+            <div className="guide-banner-body">
+              <p>
+                El asistente utiliza un <strong>motor de puntuación cruzada</strong> para recomendar los productos de tu catálogo basándose en las respuestas:
+              </p>
+              <div className="guide-banner-steps">
+                <div className="banner-step">
+                  <span className="step-badge">1</span>
+                  <div>
+                    <strong>Propiedades de Pregunta:</strong> Cada pregunta evalúa un atributo o clave (ej. <code>sabor</code>, <code>dieta</code> o <code>gender</code>).
+                  </div>
+                </div>
+                <div className="banner-step">
+                  <span className="step-badge">2</span>
+                  <div>
+                    <strong>Valores de Respuestas:</strong> Cada respuesta representa un valor posible (ej. <code>tinto</code>, <code>vegana</code>, <code>Mujer</code>).
+                  </div>
+                </div>
+                <div className="banner-step">
+                  <span className="step-badge">3</span>
+                  <div>
+                    <strong>Etiquetas del Producto:</strong> En la tabla de abajo, hacé clic en <strong>"Editar Etiquetas 🏷️"</strong> y asignale las etiquetas clave-valor correspondientes a tus productos (ej. <code>sabor: tinto</code>).
+                  </div>
+                </div>
+              </div>
+              <div className="guide-banner-footer">
+                📈 <strong>¿Cómo se decide el ganador?</strong> Cada respuesta que coincide con una etiqueta de producto suma <strong>+1 punto</strong> a ese producto. El producto que acumule el <strong>puntaje más alto</strong> al final de la trivia será el recomendado en pantalla.
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="admin-card table-card">

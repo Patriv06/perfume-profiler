@@ -2132,3 +2132,183 @@
   color: #cbd5e1;
 }
 
+/* Recommendation Logic Explanation & Banners */
+.recommendation-logic-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.logic-intro {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.logic-step {
+  display: flex;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 12px;
+  align-items: flex-start;
+}
+
+.logic-icon {
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.logic-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.logic-text strong {
+  font-size: 12px;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.logic-text p {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.logic-text code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: monospace;
+  color: #cbd5e1;
+}
+
+.logic-example-card {
+  background: rgba(212, 175, 55, 0.05);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #f8fafc;
+}
+
+.logic-example-card strong {
+  color: #d4af37;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.logic-example-card p {
+  margin: 0;
+  color: #e2e8f0;
+}
+
+.logic-example-card em {
+  color: #fff;
+  font-style: normal;
+  text-decoration: underline;
+}
+
+/* Dashboard Collapsible Recommendation Guide Banner */
+.recommendation-guide-banner {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  margin-bottom: 24px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.guide-banner-header {
+  padding: 14px 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+  user-select: none;
+}
+
+.guide-banner-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.toggle-guide-icon {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.guide-banner-body {
+  padding: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+
+.guide-banner-body p {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.guide-banner-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.banner-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 12px;
+}
+
+.step-badge {
+  background: var(--widget-accent, #722F37);
+  color: #fff;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.guide-banner-footer {
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding: 12px 0 0 0;
+  margin-top: 16px;
+  font-size: 12px;
+  color: #f1f5f9;
+}
+
