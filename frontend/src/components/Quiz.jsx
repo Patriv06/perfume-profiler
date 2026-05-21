@@ -57,10 +57,11 @@ export default function Quiz({ step, answers, setAnswers, onNext, onBack }) {
 
   const handleSelect = (value) => {
     // Save answer
-    setAnswers(prev => ({ ...prev, [currentQuestion.key]: value }));
+    const newAnswers = { ...answers, [currentQuestion.key]: value };
+    setAnswers(newAnswers);
     // Small timeout for fluid transition feedback
     setTimeout(() => {
-      onNext();
+      onNext(newAnswers);
     }, 250);
   };
 

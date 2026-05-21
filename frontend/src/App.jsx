@@ -75,11 +75,11 @@ export default function App() {
     setError(null);
   };
 
-  const handleNext = () => {
+  const handleNext = (currentAnswers) => {
     if (step === 'gender') setStep('moment');
     else if (step === 'moment') setStep('note');
     else if (step === 'note') {
-      triggerRecommendation();
+      triggerRecommendation(currentAnswers || answers);
     }
   };
 
@@ -89,12 +89,13 @@ export default function App() {
     else if (step === 'note') setStep('moment');
   };
 
-  const triggerRecommendation = async () => {
+  const triggerRecommendation = async (finalAnswers) => {
     setStep('loading');
     setError(null);
 
+    const activeAnswers = finalAnswers || answers;
     const startTime = Date.now();
-    const queryParams = new URLSearchParams(answers).toString();
+    const queryParams = new URLSearchParams(activeAnswers).toString();
 
     try {
       const res = await fetch(`/api/recommend?${queryParams}`);
