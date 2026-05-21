@@ -365,11 +365,26 @@ const Playground = () => {
         </div>
       </header>
 
+      {/* Quick Navigation Bar */}
+      <nav className="playground-quick-nav">
+        <div className="quick-nav-container">
+          <span className="quick-nav-title">Acceso Rápido:</span>
+          <div className="quick-nav-links">
+            <a href="#sec-categoria" className="quick-nav-link">📁 1. Categoría</a>
+            <a href="#sec-contenido" className="quick-nav-link">✍️ 2. Contenido</a>
+            <a href="#sec-diseno" className="quick-nav-link">🎨 3. Diseño</a>
+            <a href="#sec-preguntas" className="quick-nav-link">❓ 4. Preguntas</a>
+            <a href="#sec-funcionamiento" className="quick-nav-link">💡 5. Explicación</a>
+            <a href="#sec-instalacion" className="quick-nav-link">🔌 6. Instalación</a>
+          </div>
+        </div>
+      </nav>
+
       {/* Content Grid */}
       <main className="playground-grid">
         {/* Left Side: Customizer Panel */}
         <section className="playground-panel">
-          <div className="panel-section">
+          <div className="panel-section" id="sec-categoria">
             <h2>1. Selecciona una Categoría</h2>
             <p className="section-desc">Elegí un rubro para cargar plantillas de preguntas y productos adaptados.</p>
             
@@ -426,7 +441,7 @@ const Playground = () => {
             </div>
           </div>
 
-          <div className="panel-section">
+          <div className="panel-section" id="sec-contenido">
             <h2>2. Personaliza el Contenido</h2>
             
             <div className="input-group">
@@ -463,7 +478,7 @@ const Playground = () => {
             </div>
           </div>
 
-          <div className="panel-section">
+          <div className="panel-section" id="sec-diseno">
             <h2>3. Diseño & Colores</h2>
             
             <div className="preset-palettes-container">
@@ -526,7 +541,7 @@ const Playground = () => {
             </div>
           </div>
 
-          <div className="panel-section">
+          <div className="panel-section" id="sec-preguntas">
             <h2>4. Personalizar Preguntas</h2>
             <p className="section-desc">Editá las preguntas, agregá opciones, emoticones y tags de valor.</p>
             
@@ -614,7 +629,7 @@ const Playground = () => {
             </div>
           </div>
 
-          <div className="panel-section">
+          <div className="panel-section" id="sec-funcionamiento">
             <h2>5. Guía: ¿Cómo funciona el Recomendador?</h2>
             <p className="section-desc">Entendé cómo conectar tus preguntas con los productos recomendados de tu tienda.</p>
             
@@ -652,7 +667,7 @@ const Playground = () => {
             </div>
           </div>
 
-          <div className="panel-section">
+          <div className="panel-section" id="sec-instalacion">
             <h2>6. Guía de Integración Real</h2>
             <p className="section-desc">Cómo conectar esta solución con tu tienda real de Tiendanube en producción de forma automática.</p>
             
