@@ -178,4 +178,38 @@ router.post('/mock-register', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auth/webhooks/charge
+ * Webhook called by Tiendanube when subscription charge is updated.
+ */
+router.post('/webhooks/charge', async (req, res) => {
+  const { event, store_id, status } = req.body;
+  
+  console.log(`[Webhook] Received charge event: ${event} for store: ${store_id}, status: ${status}`);
+
+  if (!store_id) {
+    return res.status(400).json({ error: 'Falta store_id en el payload.' });
+  }
+
+  try {
+    // If status is paid/active/approved, mark as active. Otherwise, mark as inactive.
+    // Tiendanube charge statuses: "pending", "paid", "unpaid", "voided", "refunded"
+    let billingStatus = 'inactive';
+    if (status === 'paid' || status === 'active' || status === 'approved') {
+      billingStatus = 'active';
+    }
+
+    await dbRun(
+      'UPDATE tenants SET billing_status = ? WHERE store_id = ?',
+      [billingStatus, String(store_id)]
+    );
+
+    console.log(`[Webhook] Updated billing_status to: ${billingStatus} for store: ${store_id}`);
+    res.json({ success: true, billing_status: billingStatus });
+  } catch (error) {
+    console.error('[Webhook] Error updating billing status via webhook:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

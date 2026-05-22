@@ -213,9 +213,22 @@ const initDatabase = async () => {
         access_token TEXT,
         category TEXT DEFAULT 'vinos',
         quiz_config TEXT,
+        billing_status TEXT DEFAULT 'active',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Check and add billing_status column if it doesn't exist
+    try {
+      const tableInfo = await dbAll("PRAGMA table_info(tenants)");
+      const hasBillingStatus = tableInfo.some(col => col.name === 'billing_status');
+      if (!hasBillingStatus) {
+        await dbRun("ALTER TABLE tenants ADD COLUMN billing_status TEXT DEFAULT 'active'");
+        console.log("Added billing_status column to tenants table.");
+      }
+    } catch (columnError) {
+      console.error("Error checking or adding billing_status column:", columnError.message);
+    }
 
     // 2. Create products table
     await dbRun(`

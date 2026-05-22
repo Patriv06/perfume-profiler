@@ -14,7 +14,7 @@ const getApiUrl = () => {
     .replace(':5173', ':5001');
 };
 
-const LOCAL_PRODUCTS = {
+export const LOCAL_PRODUCTS = {
   vinos: [
     {
       id: 'vin1',
@@ -240,8 +240,8 @@ const getCategoryDetails = (category) => {
   }
 };
 
-const calculateRecommendationLocal = (category, answers, questions = []) => {
-  const products = LOCAL_PRODUCTS[category] || [];
+const calculateRecommendationLocal = (category, answers, questions = [], customProducts = null) => {
+  const products = customProducts || LOCAL_PRODUCTS[category] || [];
   let bestProd = null;
   let bestScore = -1;
 
@@ -305,7 +305,7 @@ const calculateRecommendationLocal = (category, answers, questions = []) => {
   return bestProd;
 };
 
-const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAddToCartSimulated = null }) => {
+const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAddToCartSimulated = null, playgroundProducts = null }) => {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(!isPlayground);
   const [error, setError] = useState(null);
@@ -338,6 +338,20 @@ const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAdd
       });
   }, [storeId, isPlayground]);
 
+  useEffect(() => {
+    const handleMessage = (e) => {
+      if (e.data && e.data.action === 'smart_assistant_preview_config') {
+        setConfig(e.data.config);
+        setStep('welcome');
+        setCurrentQuestionIndex(0);
+        setAnswers({});
+        setRecommendation(null);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   if (isPlayground ? !previewConfig : (loading || !config)) {
     if (!isPlayground && loading) {
       return (
@@ -362,7 +376,34 @@ const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAdd
     );
   }
 
-  const { title, welcome_text, theme, questions } = activeConfig;
+  if (activeConfig && activeConfig.status === 'disabled') {
+    return (
+      <div 
+        className="widget-container"
+        style={{
+          '--widget-accent': '#ef4444',
+          '--widget-bg': '#0f172a',
+          '--widget-text': '#ffffff',
+          width: isPlayground ? '100%' : '100vw',
+          height: isPlayground ? '100%' : '100vh',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '16px'
+        }}
+      >
+        <div className="widget-card welcome-view fade-in" style={{ borderColor: 'rgba(239,68,68,0.2)', minHeight: '300px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="widget-logo" style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+          <h1 className="widget-title" style={{ fontSize: '20px', color: '#fca5a5', fontWeight: '700', textAlign: 'center', marginBottom: '12px' }}>Servicio Inactivo</h1>
+          <p className="widget-welcome-text" style={{ fontSize: '13px', color: '#94a3b8', lineHeight: '1.5', margin: 0, textAlign: 'center' }}>
+            El asistente inteligente de compras no está disponible en este momento debido a un inconveniente con la suscripción de la tienda.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const { title, welcome_text, theme, questions, logo_img } = activeConfig;
 
   const handleStart = () => {
     setAnswers({});
@@ -382,7 +423,7 @@ const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAdd
       
       if (isPlayground) {
         setTimeout(() => {
-          const recProd = calculateRecommendationLocal(activeConfig.category, updatedAnswers, activeConfig.questions);
+          const recProd = calculateRecommendationLocal(activeConfig.category, updatedAnswers, activeConfig.questions, playgroundProducts);
           setRecommendation({ recommendation: recProd });
           setLoadingRecommendation(false);
         }, 1200);
@@ -462,7 +503,13 @@ const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAdd
     >
       {step === 'welcome' && (
         <div className="widget-card welcome-view fade-in">
-          <div className="widget-logo">{catDetails.logo}</div>
+          <div className="widget-logo">
+            {logo_img ? (
+              <img src={logo_img} alt="Store Logo" style={{ maxWidth: '120px', maxHeight: '60px', objectFit: 'contain' }} />
+            ) : (
+              catDetails.logo
+            )}
+          </div>
           <h1 className="widget-title">{title}</h1>
           <p className="widget-welcome-text">{welcome_text}</p>
           <button 
@@ -493,16 +540,25 @@ const QuizWidget = ({ storeId, isPlayground = false, previewConfig = null, onAdd
           <h2 className="quiz-question-text">{currentQuestion.text}</h2>
 
           <div className="options-grid">
-            {currentQuestion.options.map((opt, idx) => (
-              <div 
-                key={idx} 
-                className="option-card"
-                onClick={() => handleOptionSelect(currentQuestion.tag_key, opt.value)}
-              >
-                <span className="option-icon">{opt.icon}</span>
-                <span className="option-text">{opt.text}</span>
-              </div>
-            ))}
+            {currentQuestion.options.map((opt, idx) => {
+              const isImgIcon = opt.icon && (opt.icon.startsWith('http') || opt.icon.startsWith('/') || opt.icon.startsWith('data:image'));
+              return (
+                <div 
+                  key={idx} 
+                  className="option-card"
+                  onClick={() => handleOptionSelect(currentQuestion.tag_key, opt.value)}
+                >
+                  <span className="option-icon">
+                    {isImgIcon ? (
+                      <img src={opt.icon} alt={opt.text} className="option-icon-img" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+                    ) : (
+                      opt.icon
+                    )}
+                  </span>
+                  <span className="option-text">{opt.text}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

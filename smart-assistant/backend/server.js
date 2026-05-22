@@ -52,11 +52,16 @@ app.get('/api/widget/config', async (req, res) => {
       return res.status(404).json({ error: 'Tienda no registrada.' });
     }
 
+    if (tenant.billing_status && tenant.billing_status !== 'active') {
+      return res.json({ status: 'disabled' });
+    }
+
     const category = tenant.category || 'vinos';
     const template = templates[category] || templates.vinos;
     const config = JSON.parse(tenant.quiz_config || '{}');
 
     res.json({
+      status: 'active',
       store_name: tenant.store_name,
       category: category,
       title: config.title || template.title,
@@ -67,7 +72,8 @@ app.get('/api/widget/config', async (req, res) => {
         text_color: config.text_color || template.theme.text_color,
         button_text: config.button_text || template.theme.button_text
       },
-      questions: template.questions
+      questions: config.questions || template.questions,
+      logo_img: config.logo_img || null
     });
 
   } catch (error) {
@@ -173,13 +179,48 @@ app.get('/api/admin/config', async (req, res) => {
     const tenant = await dbGet('SELECT * FROM tenants WHERE store_id = ?', [store_id]);
     if (!tenant) return res.status(404).json({ error: 'Tienda no registrada.' });
 
+    const category = tenant.category || 'vinos';
+    const template = templates[category] || templates.vinos;
+    const quiz_config = JSON.parse(tenant.quiz_config || '{}');
+    
+    if (!quiz_config.questions) {
+      quiz_config.questions = template.questions;
+    }
+    if (!quiz_config.text_color) {
+      quiz_config.text_color = template.theme.text_color;
+    }
+
     res.json({
       store_id: tenant.store_id,
       store_name: tenant.store_name,
       store_url: tenant.store_url,
       category: tenant.category,
-      quiz_config: JSON.parse(tenant.quiz_config || '{}')
+      billing_status: tenant.billing_status || 'active',
+      quiz_config: quiz_config
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/billing/toggle
+ * Permite simular el pago/impago del comerciante para pruebas
+ */
+app.post('/api/admin/billing/toggle', async (req, res) => {
+  const { store_id } = req.query;
+  const { billing_status } = req.body;
+
+  if (!store_id || !billing_status) {
+    return res.status(400).json({ error: 'Faltan parámetros requeridos.' });
+  }
+
+  try {
+    await dbRun(
+      'UPDATE tenants SET billing_status = ? WHERE store_id = ?',
+      [billing_status, store_id]
+    );
+    res.json({ success: true, billing_status });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -211,11 +252,48 @@ app.post('/api/admin/config', async (req, res) => {
         accent_color: template.theme.accent_color,
         background_color: template.theme.background_color,
         text_color: template.theme.text_color,
-        button_text: template.theme.button_text
+        button_text: template.theme.button_text,
+        questions: template.questions
       };
+
+      // Seed mock products if it's one of the demo/mock stores
+      if (store_id === '7732051' || store_id === '9999999' || !tenant.access_token || tenant.access_token.includes('mock')) {
+        try {
+          // Delete existing product tags and products for this store
+          await dbRun('DELETE FROM product_tags WHERE store_id = ?', [store_id]);
+          await dbRun('DELETE FROM products WHERE store_id = ?', [store_id]);
+
+          // Insert the new category's mock products and their tags
+          if (template.mock_products && Array.isArray(template.mock_products)) {
+            for (const p of template.mock_products) {
+              await dbRun(
+                `INSERT INTO products (store_id, name, description, image_url, price, sku, variant_id, canonical_url)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [store_id, p.name, p.description, p.image_url, p.price, p.sku, p.variant_id, p.canonical_url]
+              );
+
+              // Get inserted product ID
+              const insertedProd = await dbGet('SELECT id FROM products WHERE store_id = ? AND sku = ?', [store_id, p.sku]);
+              if (insertedProd && p.tags && Array.isArray(p.tags)) {
+                const product_id = insertedProd.id;
+                for (const t of p.tags) {
+                  await dbRun(
+                    `INSERT INTO product_tags (store_id, product_id, tag_key, tag_value)
+                     VALUES (?, ?, ?, ?)`,
+                    [store_id, product_id, t.key, t.value]
+                  );
+                }
+              }
+            }
+          }
+          console.log(`[Category Change] Re-seeded mock products for category ${category} on store ${store_id}`);
+        } catch (seedError) {
+          console.error('[Category Change] Error seeding mock products:', seedError);
+        }
+      }
     }
 
-    // Merge manual text/style edits
+    // Merge manual text/style/question edits
     if (quiz_config) {
       updatedConfig = { ...updatedConfig, ...quiz_config };
     }

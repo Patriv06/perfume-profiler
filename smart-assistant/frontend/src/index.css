@@ -25,14 +25,24 @@
   padding: 0;
 }
 
-html, body, #root {
-  width: 100%;
-  height: 100%;
+html {
   background-color: var(--admin-bg);
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
   color: var(--admin-text-primary);
   font-family: var(--font-body);
+  min-height: 100%;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
 }
 
 /* Animations */

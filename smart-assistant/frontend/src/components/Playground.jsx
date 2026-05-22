@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import QuizWidget from './QuizWidget';
+import QuizWidget, { LOCAL_PRODUCTS } from './QuizWidget';
 
 const CATEGORY_TEMPLATES = {
   vinos: {
@@ -224,9 +224,25 @@ const Playground = () => {
   const [textColor, setTextColor] = useState(CATEGORY_TEMPLATES.vinos.text_color);
   const [questions, setQuestions] = useState(CATEGORY_TEMPLATES.vinos.questions);
   
+  // Local products list for the playground matrix tagging simulation
+  const [playgroundProducts, setPlaygroundProducts] = useState(LOCAL_PRODUCTS.vinos);
+
+  // Synchronous ref to prevent double-click limits bypass in React
+  const questionsRef = React.useRef(questions);
+  questionsRef.current = questions;
+
   // Preview mode toggle states
-  const [previewMode, setPreviewMode] = useState('phone'); // 'phone' or 'web'
+  const [previewMode, setPreviewMode] = useState('phone'); // 'phone', 'web', or 'tree'
   const [isWebWidgetOpen, setIsWebWidgetOpen] = useState(false);
+
+  // Free trial limitations states
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState('');
+  const [collapsedNodes, setCollapsedNodes] = useState({});
+
+  const toggleNode = (nodeId) => {
+    setCollapsedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
+  };
 
   // Notification state
   const [notification, setNotification] = useState(null);
@@ -243,6 +259,8 @@ const Playground = () => {
     setBackgroundColor(template.background_color);
     setTextColor(template.text_color);
     setQuestions(template.questions);
+    questionsRef.current = template.questions;
+    setPlaygroundProducts(LOCAL_PRODUCTS[catKey] || []);
     setWidgetKey(prev => prev + 1); // Reset widget workflow state
     setIsWebWidgetOpen(false);
   };
@@ -260,18 +278,26 @@ const Playground = () => {
 
   const handleResetWidget = () => {
     setWidgetKey(prev => prev + 1);
+    setPlaygroundProducts(LOCAL_PRODUCTS[selectedCat] || []);
   };
 
   // Question Builder Handlers
   const handleAddQuestion = () => {
-    const newQuestions = [...questions, {
+    if (questionsRef.current.length >= 3) {
+      setUpgradeReason('has superado el límite de 3 preguntas configuradas de la versión de prueba gratuita.');
+      setShowUpgradeModal(true);
+      return;
+    }
+    
+    const newQuestions = [...questionsRef.current, {
       text: '¿Nueva Pregunta?',
-      tag_key: `pregunta_${questions.length + 1}`,
+      tag_key: `pregunta_${questionsRef.current.length + 1}`,
       options: [
         { text: 'Opción A', value: 'opcion_a', icon: '⭐' },
         { text: 'Opción B', value: 'opcion_b', icon: '✨' }
       ]
     }];
+    questionsRef.current = newQuestions;
     setQuestions(newQuestions);
     setWidgetKey(prev => prev + 1);
   };
@@ -279,6 +305,7 @@ const Playground = () => {
   const handleRemoveQuestion = (qIndex) => {
     const newQuestions = [...questions];
     newQuestions.splice(qIndex, 1);
+    questionsRef.current = newQuestions;
     setQuestions(newQuestions);
     setWidgetKey(prev => prev + 1);
   };
@@ -289,6 +316,7 @@ const Playground = () => {
       ...newQuestions[qIndex],
       [field]: value
     };
+    questionsRef.current = newQuestions;
     setQuestions(newQuestions);
   };
 
@@ -299,6 +327,7 @@ const Playground = () => {
       ...newQuestions[qIndex],
       options: updatedOptions
     };
+    questionsRef.current = newQuestions;
     setQuestions(newQuestions);
     setWidgetKey(prev => prev + 1);
   };
@@ -311,6 +340,7 @@ const Playground = () => {
       ...newQuestions[qIndex],
       options: updatedOptions
     };
+    questionsRef.current = newQuestions;
     setQuestions(newQuestions);
     setWidgetKey(prev => prev + 1);
   };
@@ -326,7 +356,26 @@ const Playground = () => {
       ...newQuestions[qIndex],
       options: updatedOptions
     };
+    questionsRef.current = newQuestions;
     setQuestions(newQuestions);
+  };
+
+  const handleUpdateProductTag = (productId, key, value) => {
+    setPlaygroundProducts(prevProducts => {
+      const updated = prevProducts.map(p => {
+        if (p.id === productId) {
+          const updatedTags = { ...p.tags };
+          if (value === '') {
+            delete updatedTags[key];
+          } else {
+            updatedTags[key] = value;
+          }
+          return { ...p, tags: updatedTags };
+        }
+        return p;
+      });
+      return updated;
+    });
   };
 
   const previewConfig = {
@@ -340,6 +389,66 @@ const Playground = () => {
       button_text: buttonText
     },
     questions: questions
+  };
+
+  const buildTree = () => {
+    const catProducts = playgroundProducts;
+    const treeNodes = [];
+    
+    questions.forEach(q => {
+      const key = q.tag_key || '';
+      if (!key) return;
+      
+      const keyNode = {
+        label: `📁 Filtro: ${q.text || 'Sin título'} (Propiedad: "${key}")`,
+        key: key,
+        children: []
+      };
+      
+      q.options.forEach(opt => {
+        const val = opt.value || '';
+        const matchingProducts = catProducts.filter(p => p.tags && p.tags[key] === val);
+        
+        keyNode.children.push({
+          label: `🏷️ Valor: "${opt.text}" (Coincidencia: "${val}")`,
+          key: `${key}-${val}`,
+          products: matchingProducts
+        });
+      });
+      
+      // Find products with this key but no matching option
+      const optionValues = q.options.map(o => o.value);
+      const unassignedProducts = catProducts.filter(p => {
+        const pVal = p.tags ? p.tags[key] : null;
+        return pVal && !optionValues.includes(pVal);
+      });
+      if (unassignedProducts.length > 0) {
+        keyNode.children.push({
+          label: `⚠️ Con otros valores en tu tienda`,
+          key: `${key}-other`,
+          products: unassignedProducts
+        });
+      }
+      
+      treeNodes.push(keyNode);
+    });
+    
+    // Unclassified products
+    const allKeys = questions.map(q => q.tag_key).filter(Boolean);
+    const unclassified = catProducts.filter(p => {
+      return !allKeys.some(key => p.tags && p.tags[key]);
+    });
+    
+    if (unclassified.length > 0) {
+      treeNodes.push({
+        label: `📁 Sin etiquetas configuradas`,
+        key: 'unclassified',
+        isUnclassified: true,
+        products: unclassified
+      });
+    }
+    
+    return treeNodes;
   };
 
   return (
@@ -359,7 +468,7 @@ const Playground = () => {
         </div>
         
         <div className="header-actions">
-          <a href="/?store_id=9999999" className="dashboard-pill-link">
+          <a href={`/?store_id=${selectedCat === 'perfumes' ? '7732051' : '9999999'}&category=${selectedCat}`} className="dashboard-pill-link">
             <span>⚙️ Panel Administrativo</span>
           </a>
         </div>
@@ -374,8 +483,9 @@ const Playground = () => {
             <a href="#sec-contenido" className="quick-nav-link">✍️ 2. Contenido</a>
             <a href="#sec-diseno" className="quick-nav-link">🎨 3. Diseño</a>
             <a href="#sec-preguntas" className="quick-nav-link">❓ 4. Preguntas</a>
-            <a href="#sec-funcionamiento" className="quick-nav-link">💡 5. Explicación</a>
-            <a href="#sec-instalacion" className="quick-nav-link">🔌 6. Instalación</a>
+            <a href="#sec-productos-prueba" className="quick-nav-link">📦 5. Etiquetar Productos</a>
+            <a href="#sec-funcionamiento" className="quick-nav-link">💡 6. Explicación</a>
+            <a href="#sec-instalacion" className="quick-nav-link">🔌 7. Instalación</a>
           </div>
         </div>
       </nav>
@@ -569,13 +679,14 @@ const Playground = () => {
                   </div>
 
                   <div className="input-group">
-                    <label>Tag Interno (Propiedad)</label>
+                    <label>Categoría de Filtro (ej: estilo, tipo)</label>
                     <input 
                       type="text" 
                       value={q.tag_key || ''} 
                       onChange={(e) => handleUpdateQuestion(qIdx, 'tag_key', e.target.value)} 
                       placeholder="ej: tipo, dieta, uso"
                     />
+                    <span className="input-help-text">Escribe una clave identificadora única en minúsculas (ej. <code>sabor</code>, <code>dieta</code> o <code>intensidad</code>).</span>
                   </div>
 
                   <div className="options-builder-list">
@@ -587,15 +698,15 @@ const Playground = () => {
                           className="opt-icon-input" 
                           value={opt.icon || ''} 
                           onChange={(e) => handleUpdateOption(qIdx, optIdx, 'icon', e.target.value)}
-                          placeholder="🎨 Icon"
-                          title="Emoji o ícono (ej. 🍕 o :-D)"
+                          placeholder="🎨"
+                          title="Emoji de la opción"
                         />
                         <input 
                           type="text" 
                           className="opt-text-input" 
                           value={opt.text || ''} 
                           onChange={(e) => handleUpdateOption(qIdx, optIdx, 'text', e.target.value)}
-                          placeholder="Texto de la opción"
+                          placeholder="Texto para el cliente (ej: Tinto 🍷)"
                           title="Texto visible"
                         />
                         <input 
@@ -603,8 +714,8 @@ const Playground = () => {
                           className="opt-val-input" 
                           value={opt.value || ''} 
                           onChange={(e) => handleUpdateOption(qIdx, optIdx, 'value', e.target.value)}
-                          placeholder="Valor tag"
-                          title="Valor interno de tag"
+                          placeholder="ID de Etiqueta (Coincidencia)"
+                          title="Valor interno de tag (ID de Coincidencia)"
                         />
                         <button 
                           className="delete-opt-btn" 
@@ -619,6 +730,15 @@ const Playground = () => {
                     <button className="add-opt-btn" onClick={() => handleAddOption(qIdx)}>
                       + Agregar Opción
                     </button>
+
+                    <div className="dynamic-mapping-helper">
+                      <span className="helper-title">🎯 Lógica de recomendación en tiempo real:</span>
+                      {q.options.map((opt, optIdx) => (
+                        <div key={optIdx} className="helper-sentence">
+                          👉 Si el comprador elige <strong>"{opt.text || '...'}"</strong>, el asistente buscará productos con la etiqueta <strong>"{q.tag_key || 'clave'}: {opt.value || 'valor'}"</strong>.
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -629,8 +749,56 @@ const Playground = () => {
             </div>
           </div>
 
+          <div className="panel-section" id="sec-productos-prueba">
+            <h2>5. Asignar Etiquetas a Productos de Prueba</h2>
+            <p className="section-desc">Taggea los productos de tu catálogo simulado para definir cuándo deben ser recomendados.</p>
+            
+            <div className="mock-products-list">
+              {(playgroundProducts || []).map((product) => (
+                <div key={product.id} className="mock-product-row">
+                  <div className="mock-product-info">
+                    {product.image_url ? (
+                      <img src={product.image_url} alt={product.name} className="mock-product-thumb" />
+                    ) : (
+                      <div className="mock-product-thumb-placeholder">📦</div>
+                    )}
+                    <div>
+                      <h4 className="mock-product-name">{product.name}</h4>
+                      <span className="mock-product-price">${product.price}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="mock-product-tag-selectors">
+                    {questions.map((q, qIdx) => {
+                      const key = q.tag_key;
+                      if (!key) return null;
+                      const currentValue = product.tags ? product.tags[key] || '' : '';
+                      return (
+                        <div key={qIdx} className="mock-tag-selector-item">
+                          <label>{q.text || `Pregunta ${qIdx + 1}`}</label>
+                          <select
+                            value={currentValue}
+                            onChange={(e) => handleUpdateProductTag(product.id, key, e.target.value)}
+                            className="mock-tag-select"
+                          >
+                            <option value="">(Sin etiqueta / No aplica)</option>
+                            {q.options.map((opt, optIdx) => (
+                              <option key={optIdx} value={opt.value}>
+                                {opt.text} ({opt.value})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="panel-section" id="sec-funcionamiento">
-            <h2>5. Guía: ¿Cómo funciona el Recomendador?</h2>
+            <h2>6. Guía: ¿Cómo funciona el Recomendador?</h2>
             <p className="section-desc">Entendé cómo conectar tus preguntas con los productos recomendados de tu tienda.</p>
             
             <div className="recommendation-logic-box">
@@ -668,7 +836,7 @@ const Playground = () => {
           </div>
 
           <div className="panel-section" id="sec-instalacion">
-            <h2>6. Guía de Integración Real</h2>
+            <h2>7. Guía de Integración Real</h2>
             <p className="section-desc">Cómo conectar esta solución con tu tienda real de Tiendanube en producción de forma automática.</p>
             
             <div className="installation-guide-box">
@@ -707,7 +875,7 @@ const Playground = () => {
         <section className="playground-preview">
           <div className="preview-sticky-container">
             {/* Visualizer Mode Selector */}
-            <div className="preview-mode-selector">
+            <div className="preview-mode-selector" style={{ maxWidth: '480px' }}>
               <button 
                 className={`mode-selector-btn ${previewMode === 'phone' ? 'active' : ''}`}
                 onClick={() => { setPreviewMode('phone'); handleResetWidget(); }}
@@ -718,11 +886,17 @@ const Playground = () => {
                 className={`mode-selector-btn ${previewMode === 'web' ? 'active' : ''}`}
                 onClick={() => { setPreviewMode('web'); handleResetWidget(); setIsWebWidgetOpen(false); }}
               >
-                💻 Ver Demo en Web (Integrado)
+                💻 Ver Demo en Web
+              </button>
+              <button 
+                className={`mode-selector-btn ${previewMode === 'tree' ? 'active' : ''}`}
+                onClick={() => { setPreviewMode('tree'); }}
+              >
+                🌳 Árbol Jerarquías
               </button>
             </div>
 
-            {previewMode === 'phone' ? (
+            {previewMode === 'phone' && (
               /* Elegant Smartphone Wrapper */
               <div className="smartphone-mockup">
                 {/* Top Details (Dynamic island / Speaker) */}
@@ -737,6 +911,7 @@ const Playground = () => {
                     key={widgetKey}
                     isPlayground={true}
                     previewConfig={previewConfig}
+                    playgroundProducts={playgroundProducts}
                     onAddToCartSimulated={handleAddToCartSimulated}
                   />
                 </div>
@@ -744,7 +919,9 @@ const Playground = () => {
                 {/* Bottom bar indicator */}
                 <div className="smartphone-home-bar"></div>
               </div>
-            ) : (
+            )}
+
+            {previewMode === 'web' && (
               /* High-fidelity Mock E-commerce Web Preview */
               <div className="web-demo-container">
                 <div className="mock-web-page">
@@ -811,11 +988,95 @@ const Playground = () => {
                           key={widgetKey}
                           isPlayground={true}
                           previewConfig={previewConfig}
+                          playgroundProducts={playgroundProducts}
                           onAddToCartSimulated={handleAddToCartSimulated}
                         />
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {previewMode === 'tree' && (
+              <div className="hierarchy-tree-container">
+                <div className="tree-header">
+                  <h3>🌳 Árbol de Jerarquías de la Tienda (Sandbox)</h3>
+                  <p className="tree-description">
+                    Así se agrupa tu catálogo según las etiquetas configuradas en las preguntas de arriba.
+                  </p>
+                </div>
+                <div className="tree-root">
+                  <div className="tree-node root-node">
+                    <span className="tree-icon">🏪</span>
+                    <strong className="tree-label">Mi Tienda ({selectedCat.toUpperCase()})</strong>
+                  </div>
+                  
+                  <div className="tree-children">
+                    {buildTree().map((node) => {
+                      const isCollapsed = collapsedNodes[node.key];
+                      return (
+                        <div key={node.key} className="tree-node-group">
+                          <div 
+                            className={`tree-node parent-node ${isCollapsed ? 'collapsed' : ''}`}
+                            onClick={() => toggleNode(node.key)}
+                          >
+                            <span className="tree-icon">{isCollapsed ? '📁' : '📂'}</span>
+                            <span className="tree-label">{node.label}</span>
+                            <span className="toggle-arrow">{isCollapsed ? '▶' : '▼'}</span>
+                          </div>
+                          
+                          {!isCollapsed && (
+                            <div className="tree-children">
+                              {node.isUnclassified ? (
+                                node.products.map(p => (
+                                  <div key={p.id} className="tree-node leaf-node product-node">
+                                    <span className="tree-icon">📦</span>
+                                    <span className="tree-label">{p.name} <span className="tree-product-price">(${p.price})</span></span>
+                                  </div>
+                                ))
+                              ) : (
+                                node.children.map(child => {
+                                  const isChildCollapsed = collapsedNodes[child.key];
+                                  return (
+                                    <div key={child.key} className="tree-node-group sub-group">
+                                      <div 
+                                        className={`tree-node child-node ${isChildCollapsed ? 'collapsed' : ''}`}
+                                        onClick={() => toggleNode(child.key)}
+                                      >
+                                        <span className="tree-icon">🏷️</span>
+                                        <span className="tree-label">{child.label}</span>
+                                        <span className="toggle-arrow">{isChildCollapsed ? '▶' : '▼'}</span>
+                                        <span className="products-count-badge">{child.products.length} {child.products.length === 1 ? 'prod' : 'prods'}</span>
+                                      </div>
+                                      
+                                      {!isChildCollapsed && (
+                                        <div className="tree-children">
+                                          {child.products.length > 0 ? (
+                                            child.products.map(p => (
+                                              <div key={p.id} className="tree-node leaf-node product-node">
+                                                <span className="tree-icon">📦</span>
+                                                <span className="tree-label">{p.name} <span className="tree-product-price">(${p.price})</span></span>
+                                              </div>
+                                            ))
+                                          ) : (
+                                            <div className="tree-node leaf-node empty-node">
+                                              <span className="tree-icon">⚠️</span>
+                                              <span className="tree-label text-muted">Ningún producto coincide con esta etiqueta</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
@@ -842,6 +1103,46 @@ const Playground = () => {
         <div className="playground-toast fade-in-up">
           <span className="toast-icon">🛍️</span>
           <p className="toast-text">{notification}</p>
+        </div>
+      )}
+
+      {/* Modal Premium Upgrade */}
+      {showUpgradeModal && (
+        <div className="premium-modal-overlay">
+          <div className="premium-modal-card">
+            <div className="premium-modal-glow"></div>
+            <div className="premium-modal-header">
+              <span className="premium-badge">👑 PLAN PRO</span>
+              <button className="premium-close-btn" onClick={() => setShowUpgradeModal(false)}>✕</button>
+            </div>
+            <div className="premium-modal-body">
+              <div className="premium-icon-glow">✨</div>
+              <h2>¡Desbloqueá el Potencial Completo!</h2>
+              <p className="premium-reason">
+                Para garantizar un servicio óptimo, {upgradeReason}
+              </p>
+              <p className="premium-benefit-intro">
+                El Plan PRO incluye:
+              </p>
+              <ul className="premium-benefits-list">
+                <li>🚀 <strong>Preguntas ilimitadas</strong> para guiar mejor a tus compradores.</li>
+                <li>🏷️ <strong>Productos etiquetados ilimitados</strong> en tu tienda real.</li>
+                <li>📊 <strong>Métricas avanzadas</strong> de conversión y ventas.</li>
+                <li>🎨 <strong>Diseño 100% personalizable</strong> sin marca de agua.</li>
+              </ul>
+              
+              <button className="premium-upgrade-btn" onClick={() => {
+                alert('¡Gracias por tu interés! En un entorno real, aquí se abriría el checkout de pago para suscribirte al plan PRO.');
+                setShowUpgradeModal(false);
+              }}>
+                Mejorar a Plan Pro 🚀
+              </button>
+              
+              <button className="premium-secondary-btn" onClick={() => setShowUpgradeModal(false)}>
+                Seguir en Versión de Prueba
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

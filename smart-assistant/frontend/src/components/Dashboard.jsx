@@ -25,6 +25,13 @@ const Dashboard = ({ storeId }) => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showGuide, setShowGuide] = useState(true);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState('');
+  const [collapsedNodes, setCollapsedNodes] = useState({});
+
+  const toggleNode = (nodeId) => {
+    setCollapsedNodes(prev => ({ ...prev, [nodeId]: !prev[nodeId] }));
+  };
 
   // Form states
   const [category, setCategory] = useState('vinos');
@@ -32,7 +39,11 @@ const Dashboard = ({ storeId }) => {
   const [welcomeText, setWelcomeText] = useState('');
   const [accentColor, setAccentColor] = useState('#722F37');
   const [backgroundColor, setBackgroundColor] = useState('#1A1112');
+  const [textColor, setTextColor] = useState('#ffffff');
   const [buttonText, setButtonText] = useState('Comenzar');
+  const [questions, setQuestions] = useState([]);
+  const [logoImg, setLogoImg] = useState('');
+  const [billingStatus, setBillingStatus] = useState('active');
 
   const previewIframeRef = useRef(null);
   const API_URL = getApiUrl();
@@ -51,12 +62,57 @@ const Dashboard = ({ storeId }) => {
       .then(res => {
         const data = res.data;
         setConfig(data);
-        setCategory(data.category);
-        setTitle(data.quiz_config.title || '');
-        setWelcomeText(data.quiz_config.welcome_text || '');
-        setAccentColor(data.quiz_config.accent_color || '#722F37');
-        setBackgroundColor(data.quiz_config.background_color || '#1A1112');
-        setButtonText(data.quiz_config.button_text || 'Comenzar');
+        
+        // Check if there is a category override in URL (useful when clicking from Playground)
+        const params = new URLSearchParams(window.location.search);
+        const categoryParam = params.get('category');
+        const activeCategory = categoryParam && ['vinos', 'perfumes', 'chocolates', 'ropa', 'cafe', 'comidas', 'generico'].includes(categoryParam) 
+          ? categoryParam 
+          : data.category;
+          
+        setCategory(activeCategory);
+        
+        // If the category in the database is different from the override, save it
+        if (categoryParam && categoryParam !== data.category && ['vinos', 'perfumes', 'chocolates', 'ropa', 'cafe', 'comidas', 'generico'].includes(categoryParam)) {
+          axios.post(`${API_URL}/api/admin/config?store_id=${storeId}`, {
+            category: categoryParam
+          }).then(postRes => {
+            // Clean up the URL to prevent infinite loop or re-saving
+            const newUrl = window.location.pathname + `?store_id=${storeId}`;
+            window.history.replaceState({}, '', newUrl);
+            
+            // Re-fetch config and products to reflect the newly seeded database state
+            axios.get(`${API_URL}/api/admin/config?store_id=${storeId}`)
+              .then(cfgRes => {
+                const refreshedData = cfgRes.data;
+                setConfig(refreshedData);
+                setCategory(refreshedData.category);
+                setTitle(refreshedData.quiz_config.title || '');
+                setWelcomeText(refreshedData.quiz_config.welcome_text || '');
+                setAccentColor(refreshedData.quiz_config.accent_color || '#722F37');
+                setBackgroundColor(refreshedData.quiz_config.background_color || '#1A1112');
+                setTextColor(refreshedData.quiz_config.text_color || '#ffffff');
+                setButtonText(refreshedData.quiz_config.button_text || 'Comenzar');
+                setQuestions(refreshedData.quiz_config.questions || []);
+                setLogoImg(refreshedData.quiz_config.logo_img || '');
+                setBillingStatus(refreshedData.billing_status || 'active');
+                
+                // Refresh products in the list
+                fetchProducts();
+              });
+          }).catch(err => console.error("Error setting category from url:", err));
+        } else {
+          setTitle(data.quiz_config.title || '');
+          setWelcomeText(data.quiz_config.welcome_text || '');
+          setAccentColor(data.quiz_config.accent_color || '#722F37');
+          setBackgroundColor(data.quiz_config.background_color || '#1A1112');
+          setTextColor(data.quiz_config.text_color || '#ffffff');
+          setButtonText(data.quiz_config.button_text || 'Comenzar');
+          setQuestions(data.quiz_config.questions || []);
+          setLogoImg(data.quiz_config.logo_img || '');
+          setBillingStatus(data.billing_status || 'active');
+        }
+        
         setLoadingConfig(false);
       })
       .catch(err => {
@@ -79,7 +135,7 @@ const Dashboard = ({ storeId }) => {
   };
 
   const handleSaveConfig = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setSavingConfig(true);
     setSaveMessage('');
 
@@ -90,7 +146,10 @@ const Dashboard = ({ storeId }) => {
         welcome_text: welcomeText,
         accent_color: accentColor,
         background_color: backgroundColor,
-        button_text: buttonText
+        text_color: textColor,
+        button_text: buttonText,
+        questions,
+        logo_img: logoImg
       }
     })
       .then(res => {
@@ -114,6 +173,22 @@ const Dashboard = ({ storeId }) => {
       });
   };
 
+  const handleToggleBilling = () => {
+    const newStatus = billingStatus === 'active' ? 'inactive' : 'active';
+    axios.post(`${API_URL}/api/admin/billing/toggle?store_id=${storeId}`, { billing_status: newStatus })
+      .then(res => {
+        setBillingStatus(newStatus);
+        // reload iframe preview
+        if (previewIframeRef.current) {
+          previewIframeRef.current.src = previewIframeRef.current.src;
+        }
+      })
+      .catch(err => {
+        console.error('Error toggling billing:', err);
+        alert('Error al simular cambio de estado de facturación.');
+      });
+  };
+
   const handleSyncProducts = () => {
     setSyncing(true);
     axios.post(`${API_URL}/api/admin/products/sync?store_id=${storeId}`)
@@ -130,34 +205,126 @@ const Dashboard = ({ storeId }) => {
       });
   };
 
+  // Question Builder Handlers
+  const handleAddQuestion = () => {
+    if (questions.length >= 3) {
+      setUpgradeReason('has superado el límite de 3 preguntas configuradas de la versión de prueba gratuita.');
+      setShowUpgradeModal(true);
+      return;
+    }
+    
+    const newQuestions = [...questions, {
+      text: '¿Nueva Pregunta?',
+      tag_key: `pregunta_${questions.length + 1}`,
+      options: [
+        { text: 'Opción A', value: 'opcion_a', icon: '⭐' },
+        { text: 'Opción B', value: 'opcion_b', icon: '✨' }
+      ]
+    }];
+    setQuestions(newQuestions);
+  };
+
+  const handleRemoveQuestion = (qIndex) => {
+    const newQuestions = [...questions];
+    newQuestions.splice(qIndex, 1);
+    setQuestions(newQuestions);
+  };
+
+  const handleUpdateQuestion = (qIndex, field, value) => {
+    const newQuestions = [...questions];
+    newQuestions[qIndex] = {
+      ...newQuestions[qIndex],
+      [field]: value
+    };
+    setQuestions(newQuestions);
+  };
+
+  const handleAddOption = (qIndex) => {
+    const newQuestions = [...questions];
+    const updatedOptions = [...newQuestions[qIndex].options, { text: 'Nueva Opción', value: 'nueva_opcion', icon: '❓' }];
+    newQuestions[qIndex] = {
+      ...newQuestions[qIndex],
+      options: updatedOptions
+    };
+    setQuestions(newQuestions);
+  };
+
+  const handleRemoveOption = (qIndex, optIndex) => {
+    const newQuestions = [...questions];
+    const updatedOptions = [...newQuestions[qIndex].options];
+    updatedOptions.splice(optIndex, 1);
+    newQuestions[qIndex] = {
+      ...newQuestions[qIndex],
+      options: updatedOptions
+    };
+    setQuestions(newQuestions);
+  };
+
+  const handleUpdateOption = (qIndex, optIndex, field, value) => {
+    const newQuestions = [...questions];
+    const updatedOptions = [...newQuestions[qIndex].options];
+    updatedOptions[optIndex] = {
+      ...updatedOptions[optIndex],
+      [field]: value
+    };
+    newQuestions[qIndex] = {
+      ...newQuestions[qIndex],
+      options: updatedOptions
+    };
+    setQuestions(newQuestions);
+  };
+
+  const handleUploadOptionImage = (qIdx, optIdx, file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      handleUpdateOption(qIdx, optIdx, 'icon', e.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleApplyPreview = () => {
+    if (previewIframeRef.current && previewIframeRef.current.contentWindow) {
+      previewIframeRef.current.contentWindow.postMessage({
+        action: 'smart_assistant_preview_config',
+        config: {
+          category,
+          title,
+          welcome_text: welcomeText,
+          theme: {
+            accent_color: accentColor,
+            background_color: backgroundColor,
+            text_color: textColor,
+            button_text: buttonText
+          },
+          questions,
+          logo_img: logoImg
+        }
+      }, '*');
+    }
+  };
+
   // Open Tag Editor Modal for a product
   const startEditingTags = (product) => {
+    const isAlreadyTagged = product.tags && product.tags.length > 0;
+    const taggedCount = products.filter(p => p.tags && p.tags.length > 0).length;
+    
+    if (!isAlreadyTagged && taggedCount >= 10) {
+      setUpgradeReason('has alcanzado el límite de 10 productos etiquetados en la versión de prueba gratuita.');
+      setShowUpgradeModal(true);
+      return;
+    }
+
     // Clone tags so we can modify locally
     const productTags = product.tags ? [...product.tags] : [];
     
-    // Set default tags layout depending on active category
-    let initialTagState = {};
-    if (category === 'vinos') {
-      const saborTag = productTags.find(t => t.key === 'sabor');
-      const maridajeTags = productTags.filter(t => t.key === 'maridaje').map(t => t.value);
-      const ocasionTags = productTags.filter(t => t.key === 'ocasion').map(t => t.value);
-
-      initialTagState = {
-        sabor: saborTag ? saborTag.value : 'tinto',
-        maridaje: maridajeTags,
-        ocasion: ocasionTags
-      };
-    } else {
-      const genderTag = productTags.find(t => t.key === 'gender');
-      const momentTag = productTags.find(t => t.key === 'moment');
-      const noteTag = productTags.find(t => t.key === 'note');
-
-      initialTagState = {
-        gender: genderTag ? genderTag.value : 'Unisex',
-        moment: momentTag ? momentTag.value : 'Día',
-        note: noteTag ? noteTag.value : 'Floral'
-      };
-    }
+    // Set dynamic tags layout depending on active questions list
+    const initialTagState = {};
+    questions.forEach(q => {
+      const key = q.tag_key;
+      if (!key) return;
+      initialTagState[key] = productTags.filter(t => t.key === key).map(t => t.value);
+    });
 
     setEditingProduct({
       ...product,
@@ -165,20 +332,16 @@ const Dashboard = ({ storeId }) => {
     });
   };
 
-  const handleTagValueChange = (key, value, isCheckbox = false) => {
+  const handleTagValueChange = (key, value) => {
     if (!editingProduct) return;
 
     let updatedEditedTags = { ...editingProduct.editedTags };
+    const currentValues = updatedEditedTags[key] || [];
 
-    if (isCheckbox) {
-      const currentValues = updatedEditedTags[key] || [];
-      if (currentValues.includes(value)) {
-        updatedEditedTags[key] = currentValues.filter(val => val !== value);
-      } else {
-        updatedEditedTags[key] = [...currentValues, value];
-      }
+    if (currentValues.includes(value)) {
+      updatedEditedTags[key] = currentValues.filter(val => val !== value);
     } else {
-      updatedEditedTags[key] = value;
+      updatedEditedTags[key] = [...currentValues, value];
     }
 
     setEditingProduct({
@@ -190,23 +353,17 @@ const Dashboard = ({ storeId }) => {
   const handleSaveTags = () => {
     if (!editingProduct) return;
 
-    // Convert local editedTags structure into array of {key, value}
     const formattedTags = [];
     const et = editingProduct.editedTags;
 
-    if (category === 'vinos') {
-      if (et.sabor) formattedTags.push({ key: 'sabor', value: et.sabor });
-      if (et.maridaje) {
-        et.maridaje.forEach(v => formattedTags.push({ key: 'maridaje', value: v }));
+    Object.keys(et).forEach(key => {
+      const vals = et[key];
+      if (Array.isArray(vals)) {
+        vals.forEach(v => {
+          if (v) formattedTags.push({ key, value: v });
+        });
       }
-      if (et.ocasion) {
-        et.ocasion.forEach(v => formattedTags.push({ key: 'ocasion', value: v }));
-      }
-    } else {
-      if (et.gender) formattedTags.push({ key: 'gender', value: et.gender });
-      if (et.moment) formattedTags.push({ key: 'moment', value: et.moment });
-      if (et.note) formattedTags.push({ key: 'note', value: et.note });
-    }
+    });
 
     axios.post(`${API_URL}/api/admin/products/tags?store_id=${storeId}`, {
       product_id: editingProduct.id,
@@ -226,6 +383,67 @@ const Dashboard = ({ storeId }) => {
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  const buildDashboardTree = () => {
+    const treeNodes = [];
+    
+    questions.forEach(q => {
+      const keyNode = {
+        label: `📁 Filtro: ${q.text} (${q.tag_key})`,
+        key: q.tag_key,
+        children: []
+      };
+      
+      if (q.options && Array.isArray(q.options)) {
+        q.options.forEach(opt => {
+          const matchingProducts = products.filter(p => 
+            p.tags && p.tags.some(t => t.key === q.tag_key && t.value === opt.value)
+          );
+          
+          keyNode.children.push({
+            label: `🏷️ Valor: "${opt.text}" (Coincidencia: "${opt.value}")`,
+            key: `${q.tag_key}-${opt.value}`,
+            products: matchingProducts
+          });
+        });
+        
+        // Unassigned values check
+        const optionValues = q.options.map(o => o.value);
+        const unassignedProducts = products.filter(p => {
+          if (!p.tags) return false;
+          const matchingTags = p.tags.filter(t => t.key === q.tag_key);
+          return matchingTags.some(t => !optionValues.includes(t.value));
+        });
+        
+        if (unassignedProducts.length > 0) {
+          keyNode.children.push({
+            label: `⚠️ Con otros valores en tu tienda`,
+            key: `${q.tag_key}-other`,
+            products: unassignedProducts
+          });
+        }
+      }
+      
+      treeNodes.push(keyNode);
+    });
+    
+    // Unclassified products in Dashboard
+    const allKeys = questions.map(q => q.tag_key);
+    const unclassified = products.filter(p => {
+      return !p.tags || !p.tags.some(t => allKeys.includes(t.key));
+    });
+    
+    if (unclassified.length > 0) {
+      treeNodes.push({
+        label: `📁 Sin etiquetas configuradas`,
+        key: 'unclassified',
+        isUnclassified: true,
+        products: unclassified
+      });
+    }
+    
+    return treeNodes;
+  };
 
   if (loadingConfig) {
     return (
@@ -251,25 +469,99 @@ const Dashboard = ({ storeId }) => {
           </div>
         </div>
 
-        {config && (
-          <div className="store-badge-card">
-            <span className="store-status-dot"></span>
-            <div>
-              <div className="store-name">{config.store_name}</div>
-              <a href={config.store_url} target="_blank" rel="noopener noreferrer" className="store-url">
-                {config.store_url.replace(/https?:\/\//, '')} ↗
-              </a>
+        <div className="header-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <a href="/" className="btn-secondary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '8px 12px', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', color: '#f8fafc', fontWeight: '500' }}>
+            🎮 Volver al Playground
+          </a>
+          
+          <button 
+            onClick={handleToggleBilling} 
+            className={`billing-toggle-pill ${billingStatus === 'active' ? 'active' : 'inactive'}`}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '10px',
+              border: 'none',
+              fontWeight: '600',
+              fontSize: '12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              backgroundColor: billingStatus === 'active' ? '#10b981' : '#ef4444',
+              color: '#ffffff',
+              transition: 'background-color 0.2s ease'
+            }}
+          >
+            {billingStatus === 'active' ? (
+              <>💳 Suscripción: Activa</>
+            ) : (
+              <>⚠️ Suscripción: Inactiva</>
+            )}
+          </button>
+
+          {config && (
+            <div className="store-badge-card" style={{ margin: 0 }}>
+              <span className="store-status-dot" style={{ backgroundColor: billingStatus === 'active' ? '#10b981' : '#ef4444' }}></span>
+              <div>
+                <div className="store-name">{config.store_name}</div>
+                <a href={config.store_url} target="_blank" rel="noopener noreferrer" className="store-url">
+                  {config.store_url.replace(/https?:\/\//, '')} ↗
+                </a>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </header>
+
+      {/* Warning Banner when Billing is Inactive */}
+      {billingStatus === 'inactive' && (
+        <div className="billing-warning-banner" style={{ background: '#ef4444', color: '#ffffff', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: '500', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '20px' }}>⚠️</span>
+            <span>
+              <strong>Suscripción Inactiva por Falta de Pago:</strong> El asistente de compras está actualmente desactivado en el storefront de tus clientes. Los compradores no podrán ver ni interactuar con el recomendador.
+            </span>
+          </div>
+          <button 
+            type="button" 
+            onClick={handleToggleBilling} 
+            style={{ background: '#ffffff', color: '#ef4444', border: 'none', padding: '6px 12px', borderRadius: '4px', fontWeight: '700', cursor: 'pointer' }}
+          >
+            Activar Suscripción
+          </button>
+        </div>
+      )}
+
+      {/* Quick Navigation Bar */}
+      <nav className="admin-quick-nav">
+        <div className="quick-nav-container">
+          <span className="quick-nav-title">Acceso Rápido:</span>
+          <div className="quick-nav-links">
+            <a href="#sec-config" className="quick-nav-link">⚙️ 1. Personalización</a>
+            <a href="#sec-script" className="quick-nav-link">🔌 2. Integración</a>
+            <a href="#sec-preview" className="quick-nav-link">📱 3. Simulador</a>
+            <a href="#sec-products" className="quick-nav-link">📦 4. Matriz de Productos</a>
+            <a href="#sec-tree" className="quick-nav-link">🌳 5. Árbol de Jerarquías</a>
+          </div>
+        </div>
+      </nav>
 
       {/* Main Grid */}
       <div className="admin-main-grid">
         
         {/* Left Column: Config Forms */}
         <div className="grid-column-left">
-          <div className="admin-card config-card">
+          <div className="admin-card config-card" id="sec-config">
+            {billingStatus === 'inactive' && (
+              <div className="billing-lock-overlay">
+                <div className="lock-content">
+                  <span className="lock-icon">🔒</span>
+                  <h3>Personalización Bloqueada</h3>
+                  <p>Suscripción inactiva. Regularizá el pago para habilitar la personalización.</p>
+                  <button type="button" className="btn-primary btn-sm" onClick={handleToggleBilling}>Activar Suscripción</button>
+                </div>
+              </div>
+            )}
             <h2 className="card-title">⚙️ Personalización del Asistente</h2>
             
             <form onSubmit={handleSaveConfig} className="config-form">
@@ -282,10 +574,47 @@ const Dashboard = ({ storeId }) => {
                 >
                   <option value="vinos">🍷 Vinos (Sommelier Virtual)</option>
                   <option value="perfumes">✨ Perfumes (Buscador de Fragancias)</option>
+                  <option value="chocolates">🍫 Chocolates (Tu Chocolate Perfecto)</option>
+                  <option value="ropa">👕 Ropa (Encontrá tu Outfit Ideal)</option>
+                  <option value="cafe">☕ Café (Elegí tu Variedad de Café)</option>
+                  <option value="comidas">🍽️ Comidas (¿Qué vas a comer hoy?)</option>
+                  <option value="generico">🎁 Genérico (Encontrá tu Producto Ideal)</option>
                 </select>
                 <p className="form-help-text">
-                  Al cambiar de categoría se cargarán automáticamente las preguntas específicas de ese rubro.
+                  Al cambiar de categoría se cargarán automáticamente las preguntas específicas de ese rubro y se actualizarán los productos de demostración.
                 </p>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Logo del Asistente</label>
+                <div className="logo-uploader-container" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                  {logoImg ? (
+                    <div className="logo-preview-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <img src={logoImg} alt="Logo preview" className="admin-logo-preview" style={{ maxHeight: '50px', maxWidth: '100px', objectFit: 'contain', display: 'block', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', padding: '4px' }} />
+                      <button type="button" className="btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => setLogoImg('')}>Quitar Logo</button>
+                    </div>
+                  ) : (
+                    <div className="file-upload-wrapper">
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        id="logo-file-input" 
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (evt) => setLogoImg(evt.target.result);
+                            reader.readAsDataURL(file);
+                          }
+                        }} 
+                        style={{ display: 'none' }}
+                      />
+                      <label htmlFor="logo-file-input" className="btn-secondary" style={{ cursor: 'pointer', display: 'inline-block', padding: '6px 12px', fontSize: '12px' }}>
+                        🖼️ Subir Logo Imagen (Base64)
+                      </label>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="form-group">
@@ -324,7 +653,7 @@ const Dashboard = ({ storeId }) => {
                 />
               </div>
 
-              <div className="colors-row">
+              <div className="colors-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                 <div className="form-group color-picker-group">
                   <label className="form-label">Color de Acento</label>
                   <div className="color-input-wrapper">
@@ -339,12 +668,13 @@ const Dashboard = ({ storeId }) => {
                       className="color-hex-text" 
                       value={accentColor}
                       onChange={(e) => setAccentColor(e.target.value)}
+                      style={{ fontSize: '11px', padding: '6px 8px' }}
                     />
                   </div>
                 </div>
 
                 <div className="form-group color-picker-group">
-                  <label className="form-label">Fondo del Asistente</label>
+                  <label className="form-label">Fondo</label>
                   <div className="color-input-wrapper">
                     <input 
                       type="color" 
@@ -357,22 +687,200 @@ const Dashboard = ({ storeId }) => {
                       className="color-hex-text" 
                       value={backgroundColor}
                       onChange={(e) => setBackgroundColor(e.target.value)}
+                      style={{ fontSize: '11px', padding: '6px 8px' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group color-picker-group">
+                  <label className="form-label">Color de Texto</label>
+                  <div className="color-input-wrapper">
+                    <input 
+                      type="color" 
+                      className="form-color-picker"
+                      value={textColor}
+                      onChange={(e) => setTextColor(e.target.value)}
+                    />
+                    <input 
+                      type="text" 
+                      className="color-hex-text" 
+                      value={textColor}
+                      onChange={(e) => setTextColor(e.target.value)}
+                      style={{ fontSize: '11px', padding: '6px 8px' }}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="form-actions">
+              {/* Question Builder Section */}
+              <div className="question-builder-section" style={{ marginTop: '24px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '600' }}>❓ Cuestionario Inteligente</h3>
+                  <button 
+                    type="button" 
+                    className="btn-secondary" 
+                    onClick={handleAddQuestion}
+                    style={{ fontSize: '11px', padding: '4px 8px', borderColor: 'var(--widget-accent)' }}
+                  >
+                    + Agregar Pregunta
+                  </button>
+                </div>
+
+                {questions.map((q, qIdx) => (
+                  <div key={qIdx} className="builder-question-card" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--widget-accent)' }}>Pregunta {qIdx + 1} de {questions.length}</span>
+                      <button 
+                        type="button" 
+                        onClick={() => handleRemoveQuestion(qIdx)}
+                        style={{ padding: '2px 6px', fontSize: '10px', background: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '4px', cursor: 'pointer' }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>Pregunta</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        value={q.text || ''} 
+                        onChange={(e) => handleUpdateQuestion(qIdx, 'text', e.target.value)}
+                        placeholder="Ej: ¿Qué sabor preferís?"
+                        style={{ padding: '8px 12px', fontSize: '13px' }}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '12px' }}>
+                      <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>Propiedad del Producto (tag_key)</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        value={q.tag_key || ''} 
+                        onChange={(e) => handleUpdateQuestion(qIdx, 'tag_key', e.target.value)}
+                        placeholder="Ej: sabor"
+                        style={{ padding: '8px 12px', fontSize: '13px' }}
+                        required
+                      />
+                    </div>
+
+                    <div className="builder-options-container" style={{ borderLeft: '2px solid rgba(255,255,255,0.1)', paddingLeft: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: '600', opacity: 0.8 }}>Opciones</span>
+                        <button 
+                          type="button" 
+                          className="btn-secondary" 
+                          onClick={() => handleAddOption(qIdx)}
+                          style={{ fontSize: '10px', padding: '2px 6px' }}
+                        >
+                          + Opción
+                        </button>
+                      </div>
+
+                      {q.options && q.options.map((opt, optIdx) => {
+                        const isImgIcon = opt.icon && (opt.icon.startsWith('data:image') || opt.icon.startsWith('http') || opt.icon.startsWith('/'));
+                        return (
+                          <div key={optIdx} className="builder-option-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: '6px', alignItems: 'center', marginBottom: '6px' }}>
+                            <input 
+                              type="text" 
+                              className="form-input" 
+                              value={opt.text || ''} 
+                              onChange={(e) => handleUpdateOption(qIdx, optIdx, 'text', e.target.value)}
+                              placeholder="Texto"
+                              style={{ padding: '6px 8px', fontSize: '12px' }}
+                              required
+                            />
+                            <input 
+                              type="text" 
+                              className="form-input" 
+                              value={opt.value || ''} 
+                              onChange={(e) => handleUpdateOption(qIdx, optIdx, 'value', e.target.value)}
+                              placeholder="Valor"
+                              style={{ padding: '6px 8px', fontSize: '12px' }}
+                              required
+                            />
+                            <div className="icon-uploader-or-emoji" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              {isImgIcon ? (
+                                <div style={{ position: 'relative' }}>
+                                  <img src={opt.icon} alt="icon preview" style={{ width: '20px', height: '20px', objectFit: 'contain', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px' }} />
+                                  <button 
+                                    type="button" 
+                                    onClick={() => handleUpdateOption(qIdx, optIdx, 'icon', '⭐')}
+                                    style={{ position: 'absolute', top: '-4px', right: '-4px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: '10px', height: '10px', fontSize: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ) : (
+                                <input 
+                                  type="text" 
+                                  className="form-input" 
+                                  value={opt.icon || ''} 
+                                  onChange={(e) => handleUpdateOption(qIdx, optIdx, 'icon', e.target.value)}
+                                  placeholder="⭐"
+                                  style={{ width: '32px', textAlign: 'center', padding: '6px 4px', fontSize: '12px' }}
+                                />
+                              )}
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                id={`opt-file-${qIdx}-${optIdx}`} 
+                                style={{ display: 'none' }}
+                                onChange={(e) => handleUploadOptionImage(qIdx, optIdx, e.target.files[0])}
+                              />
+                              <label 
+                                htmlFor={`opt-file-${qIdx}-${optIdx}`} 
+                                className="btn-secondary" 
+                                style={{ cursor: 'pointer', padding: '6px 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                              >
+                                🖼️
+                              </label>
+                            </div>
+                            <button 
+                              type="button" 
+                              onClick={() => handleRemoveOption(qIdx, optIdx)}
+                              style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '12px', padding: '4px' }}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="form-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginTop: '20px' }}>
                 <button type="submit" className="btn-primary" disabled={savingConfig}>
-                  {savingConfig ? 'Guardando...' : 'Guardar Cambios'}
+                  {savingConfig ? 'Guardando...' : 'Guardar en BD'}
                 </button>
-                {saveMessage && <span className="save-feedback">{saveMessage}</span>}
+                <button 
+                  type="button" 
+                  className="btn-secondary" 
+                  onClick={handleApplyPreview}
+                  style={{ borderColor: 'var(--widget-accent)' }}
+                >
+                  Aplicar al Simulador 🚀
+                </button>
+                {saveMessage && <span className="save-feedback" style={{ fontSize: '13px' }}>{saveMessage}</span>}
               </div>
             </form>
           </div>
 
           {/* Script Integration Card */}
-          <div className="admin-card script-card">
+          <div className="admin-card script-card" id="sec-script">
+            {billingStatus === 'inactive' && (
+              <div className="billing-lock-overlay">
+                <div className="lock-content">
+                  <span className="lock-icon">🔒</span>
+                  <h3>Integración Bloqueada</h3>
+                  <p>Suscripción inactiva. Regularizá el pago para habilitar la integración.</p>
+                  <button type="button" className="btn-primary btn-sm" onClick={handleToggleBilling}>Activar Suscripción</button>
+                </div>
+              </div>
+            )}
             <h3 className="card-title">🔌 Código de Integración Manual</h3>
             <p className="card-info-text">
               El script se inyecta **automáticamente** al instalar la app. Si necesitás agregarlo a otra página o plantilla personalizada, insertá el siguiente código antes del cierre del body:
@@ -385,7 +893,7 @@ const Dashboard = ({ storeId }) => {
 
         {/* Right Column: Live Simulator Preview */}
         <div className="grid-column-right">
-          <div className="admin-card preview-card">
+          <div className="admin-card preview-card" id="sec-preview">
             <h2 className="card-title">📱 Simulador en Tiempo Real</h2>
             <p className="preview-subtitle">Probá el flujo y mirá cómo luce en un celular</p>
             
@@ -405,13 +913,28 @@ const Dashboard = ({ storeId }) => {
       </div>
 
       {/* Bottom Section: Products Matrix and Tags Editor */}
-      <section className="admin-products-section">
+      <section className="admin-products-section" id="sec-products">
         <div className="products-section-header">
           <div>
             <h2 className="section-title">📦 Matriz de Recomendación de Productos</h2>
             <p className="section-subtitle">
               Sincronizá tus artículos de Tiendanube y gestioná las etiquetas del recomendador.
             </p>
+            <div className="trial-limit-tracker" style={{ marginTop: '14px' }}>
+              <div className="tracker-info">
+                <span>🏷️ Productos etiquetados: <strong>{products.filter(p => p.tags && p.tags.length > 0).length} / 10</strong></span>
+                <span className="tracker-badge">Plan Gratuito</span>
+              </div>
+              <div className="tracker-bar-bg">
+                <div 
+                  className="tracker-bar-fill" 
+                  style={{ 
+                    width: `${Math.min((products.filter(p => p.tags && p.tags.length > 0).length / 10) * 100, 100)}%`, 
+                    backgroundColor: products.filter(p => p.tags && p.tags.length > 0).length >= 10 ? '#ef4444' : '#D4AF37' 
+                  }}
+                ></div>
+              </div>
+            </div>
           </div>
           <div className="section-actions">
             <button 
@@ -466,6 +989,16 @@ const Dashboard = ({ storeId }) => {
         </div>
 
         <div className="admin-card table-card">
+          {billingStatus === 'inactive' && (
+            <div className="billing-lock-overlay">
+              <div className="lock-content">
+                <span className="lock-icon">🔒</span>
+                <h3>Matriz de Productos Bloqueada</h3>
+                <p>Suscripción inactiva. Regularizá el pago para gestionar etiquetas de recomendación.</p>
+                <button type="button" className="btn-primary btn-sm" onClick={handleToggleBilling}>Activar Suscripción</button>
+              </div>
+            </div>
+          )}
           <div className="table-filter-bar">
             <input 
               type="text"
@@ -555,123 +1088,25 @@ const Dashboard = ({ storeId }) => {
                 Asigná etiquetas específicas a este producto para que el recomendador inteligente lo sugiera cuando coincida con las respuestas del comprador.
               </p>
 
-              {category === 'vinos' ? (
-                // WINES TEMPLATE TAGS
-                <div className="modal-tag-selectors">
-                  <div className="tag-selector-group">
-                    <label className="tag-label">Perfil de Sabor (Elegir Uno)</label>
-                    <div className="tag-radio-options">
-                      {['tinto', 'blanco', 'rosado'].map((v) => (
-                        <label key={v} className="tag-radio-label">
-                          <input
-                            type="radio"
-                            name="sabor"
-                            checked={editingProduct.editedTags.sabor === v}
-                            onChange={() => handleTagValueChange('sabor', v)}
-                          />
-                          {v.toUpperCase()}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="tag-selector-group">
-                    <label className="tag-label">Maridaje Recomendado (Multiselección)</label>
+              <div className="modal-tag-selectors">
+                {questions.map((q) => (
+                  <div className="tag-selector-group" key={q.tag_key}>
+                    <label className="tag-label">{q.text} (<code>{q.tag_key}</code>)</label>
                     <div className="tag-checkbox-options">
-                      {[
-                        { label: 'Carnes Rojas / Asado', val: 'carnes' },
-                        { label: 'Pastas / Salsas rojas', val: 'pastas' },
-                        { label: 'Pescados / Ensaladas', val: 'pescados' },
-                        { label: 'Quesos / Picadas', val: 'quesos' }
-                      ].map((item) => (
-                        <label key={item.val} className="tag-checkbox-label">
+                      {q.options && q.options.map((opt) => (
+                        <label key={opt.value} className="tag-checkbox-label">
                           <input
                             type="checkbox"
-                            checked={(editingProduct.editedTags.maridaje || []).includes(item.val)}
-                            onChange={() => handleTagValueChange('maridaje', item.val, true)}
+                            checked={(editingProduct.editedTags[q.tag_key] || []).includes(opt.value)}
+                            onChange={() => handleTagValueChange(q.tag_key, opt.value)}
                           />
-                          {item.label}
+                          {opt.text} <span style={{ opacity: 0.5, fontSize: '11px' }}>({opt.value})</span>
                         </label>
                       ))}
                     </div>
                   </div>
-
-                  <div className="tag-selector-group">
-                    <label className="tag-label">Ocasión de Consumo (Multiselección)</label>
-                    <div className="tag-checkbox-options">
-                      {[
-                        { label: 'Cena formal / Romántica', val: 'cena' },
-                        { label: 'Asado / Juntada informal', val: 'asado' },
-                        { label: 'Regalo especial', val: 'regalo' },
-                        { label: 'Relajarse después del día', val: 'relax' }
-                      ].map((item) => (
-                        <label key={item.val} className="tag-checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={(editingProduct.editedTags.ocasion || []).includes(item.val)}
-                            onChange={() => handleTagValueChange('ocasion', item.val, true)}
-                          />
-                          {item.label}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                // PERFUMES TEMPLATE TAGS
-                <div className="modal-tag-selectors">
-                  <div className="tag-selector-group">
-                    <label className="tag-label">Público / Género</label>
-                    <div className="tag-radio-options">
-                      {['Hombre', 'Mujer', 'Unisex'].map((v) => (
-                        <label key={v} className="tag-radio-label">
-                          <input
-                            type="radio"
-                            name="gender"
-                            checked={editingProduct.editedTags.gender === v}
-                            onChange={() => handleTagValueChange('gender', v)}
-                          />
-                          {v}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="tag-selector-group">
-                    <label className="tag-label">Momento del Día</label>
-                    <div className="tag-radio-options">
-                      {['Día', 'Noche'].map((v) => (
-                        <label key={v} className="tag-radio-label">
-                          <input
-                            type="radio"
-                            name="moment"
-                            checked={editingProduct.editedTags.moment === v}
-                            onChange={() => handleTagValueChange('moment', v)}
-                          />
-                          {v}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="tag-selector-group">
-                    <label className="tag-label">Nota Olfativa Principal</label>
-                    <div className="tag-radio-options">
-                      {['Cítrico', 'Amaderado', 'Floral', 'Oriental'].map((v) => (
-                        <label key={v} className="tag-radio-label">
-                          <input
-                            type="radio"
-                            name="note"
-                            checked={editingProduct.editedTags.note === v}
-                            onChange={() => handleTagValueChange('note', v)}
-                          />
-                          {v}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
 
             <div className="modal-footer">
@@ -680,6 +1115,131 @@ const Dashboard = ({ storeId }) => {
               </button>
               <button className="btn-modal-save" onClick={handleSaveTags}>
                 Guardar Etiquetas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hierarchy Tree Section */}
+      <section className="admin-tree-section" id="sec-tree" style={{ marginTop: '40px' }}>
+        <div className="admin-card tree-card">
+          <div className="tree-header">
+            <h2 className="section-title">🌳 Árbol de Jerarquías de la Tienda</h2>
+            <p className="section-subtitle">
+              Visualizá la taxonomía de tus productos y su organización de recomendación.
+            </p>
+          </div>
+          
+          <div className="tree-root">
+            <div className="tree-node root-node">
+              <span className="tree-icon">🏪</span>
+              <strong className="tree-label">{config ? config.store_name : 'Mi Tienda'} ({category.toUpperCase()})</strong>
+            </div>
+            
+            <div className="tree-children">
+              {buildDashboardTree().map((node) => {
+                const isCollapsed = collapsedNodes[node.key];
+                return (
+                  <div key={node.key} className="tree-node-group">
+                    <div 
+                      className={`tree-node parent-node ${isCollapsed ? 'collapsed' : ''}`}
+                      onClick={() => toggleNode(node.key)}
+                    >
+                      <span className="tree-icon">{isCollapsed ? '📁' : '📂'}</span>
+                      <span className="tree-label">{node.label}</span>
+                      <span className="toggle-arrow">{isCollapsed ? '▶' : '▼'}</span>
+                    </div>
+                    
+                    {!isCollapsed && (
+                      <div className="tree-children">
+                        {node.isUnclassified ? (
+                          node.products.map(p => (
+                            <div key={p.id} className="tree-node leaf-node product-node">
+                              <span className="tree-icon">📦</span>
+                              <span className="tree-label">{p.name} <span className="tree-product-price">(${parseFloat(p.price).toLocaleString('es-AR')})</span></span>
+                            </div>
+                          ))
+                        ) : (
+                          node.children.map(child => {
+                            const isChildCollapsed = collapsedNodes[child.key];
+                            return (
+                              <div key={child.key} className="tree-node-group sub-group">
+                                <div 
+                                  className={`tree-node child-node ${isChildCollapsed ? 'collapsed' : ''}`}
+                                  onClick={() => toggleNode(child.key)}
+                                >
+                                  <span className="tree-icon">🏷️</span>
+                                  <span className="tree-label">{child.label}</span>
+                                  <span className="toggle-arrow">{isChildCollapsed ? '▶' : '▼'}</span>
+                                  <span className="products-count-badge">{child.products.length} {child.products.length === 1 ? 'prod' : 'prods'}</span>
+                                </div>
+                                
+                                {!isChildCollapsed && (
+                                  <div className="tree-children">
+                                    {child.products.length > 0 ? (
+                                      child.products.map(p => (
+                                        <div key={p.id} className="tree-node leaf-node product-node">
+                                          <span className="tree-icon">📦</span>
+                                          <span className="tree-label">{p.name} <span className="tree-product-price">(${parseFloat(p.price).toLocaleString('es-AR')})</span></span>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="tree-node leaf-node empty-node">
+                                        <span className="tree-icon">⚠️</span>
+                                        <span className="tree-label text-muted">Ningún producto coincide con esta etiqueta</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Modal Premium Upgrade */}
+      {showUpgradeModal && (
+        <div className="premium-modal-overlay">
+          <div className="premium-modal-card">
+            <div className="premium-modal-glow"></div>
+            <div className="premium-modal-header">
+              <span className="premium-badge">👑 PLAN PRO</span>
+              <button className="premium-close-btn" onClick={() => setShowUpgradeModal(false)}>✕</button>
+            </div>
+            <div className="premium-modal-body">
+              <div className="premium-icon-glow">✨</div>
+              <h2>¡Desbloqueá el Potencial Completo!</h2>
+              <p className="premium-reason">
+                Para garantizar un servicio óptimo, {upgradeReason}
+              </p>
+              <p className="premium-benefit-intro">
+                El Plan PRO incluye:
+              </p>
+              <ul className="premium-benefits-list">
+                <li>🚀 <strong>Preguntas ilimitadas</strong> para guiar mejor a tus compradores.</li>
+                <li>🏷️ <strong>Productos etiquetados ilimitados</strong> en tu tienda real.</li>
+                <li>📊 <strong>Métricas avanzadas</strong> de conversión y ventas.</li>
+                <li>🎨 <strong>Diseño 100% personalizable</strong> sin marca de agua.</li>
+              </ul>
+              
+              <button className="premium-upgrade-btn" onClick={() => {
+                alert('¡Gracias por tu interés! En un entorno real, aquí se abriría el checkout de pago para suscribirte al plan PRO.');
+                setShowUpgradeModal(false);
+              }}>
+                Mejorar a Plan Pro 🚀
+              </button>
+              
+              <button className="premium-secondary-btn" onClick={() => setShowUpgradeModal(false)}>
+                Seguir en Versión de Prueba
               </button>
             </div>
           </div>
