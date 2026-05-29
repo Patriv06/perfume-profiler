@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: smart-assistant-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: smart_user
+      POSTGRES_PASSWORD: smart_password
+      POSTGRES_DB: smart_assistant
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
   backend:
     build:
       context: ./backend
@@ -10,12 +23,12 @@ services:
       - "5001:5001"
     environment:
       - PORT=5001
-      - DATABASE_PATH=/data/smart_assistant.db
+      - DATABASE_URL=postgresql://smart_user:smart_password@db:5432/smart_assistant
       - TIENDANUBE_CLIENT_ID=${TIENDANUBE_CLIENT_ID:-}
       - TIENDANUBE_CLIENT_SECRET=${TIENDANUBE_CLIENT_SECRET:-}
       - TIENDANUBE_APP_NAME=${TIENDANUBE_APP_NAME:-SmartShoppingAssistant}
-    volumes:
-      - backend-db:/data
+    depends_on:
+      - db
     restart: unless-stopped
 
   frontend:
@@ -30,4 +43,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  backend-db:
+  postgres-data:

@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
-const { dbRun, dbGet } = require('./db');
+const { dbRun, dbGet, widgetConfigCache } = require('./db');
 const { registerStorefrontScript } = require('./tiendanube');
 const templates = require('./templates');
 
@@ -57,12 +57,12 @@ router.get('/callback', async (req, res) => {
     }
 
     // Check if tenant already exists
-    const existingTenant = await dbGet('SELECT * FROM tenants WHERE store_id = ?', [store_id]);
+    const existingTenant = await dbGet('SELECT * FROM tenants WHERE store_id = $1', [store_id]);
     
     if (existingTenant) {
       // Update token and details
       await dbRun(
-        'UPDATE tenants SET store_name = ?, store_url = ?, access_token = ? WHERE store_id = ?',
+        'UPDATE tenants SET store_name = $1, store_url = $2, access_token = $3 WHERE store_id = $4',
         [storeName, storeUrl, access_token, store_id]
       );
       console.log(`[Auth] Updated existing tenant: ${store_id}`);
@@ -70,7 +70,7 @@ router.get('/callback', async (req, res) => {
       // Create new tenant with default 'vinos' template
       const defaultTemplate = templates.vinos;
       await dbRun(
-        'INSERT INTO tenants (store_id, store_name, store_url, access_token, category, quiz_config) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO tenants (store_id, store_name, store_url, access_token, category, quiz_config) VALUES ($1, $2, $3, $4, $5, $6)',
         [
           store_id,
           storeName,
@@ -89,6 +89,9 @@ router.get('/callback', async (req, res) => {
       );
       console.log(`[Auth] Created new tenant: ${store_id}`);
     }
+
+    // Invalidate cache for this tenant
+    widgetConfigCache.del(store_id);
 
     // Auto-inject script
     const scriptUrl = `${APP_URL}/widget.js`;
@@ -123,11 +126,11 @@ router.post('/mock-register', async (req, res) => {
   const selectedTemplate = templates[activeCategory] || templates.vinos;
 
   try {
-    const existingTenant = await dbGet('SELECT * FROM tenants WHERE store_id = ?', [store_id]);
+    const existingTenant = await dbGet('SELECT * FROM tenants WHERE store_id = $1', [store_id]);
     
     if (existingTenant) {
       await dbRun(
-        'UPDATE tenants SET store_name = ?, store_url = ?, access_token = ?, category = ? WHERE store_id = ?',
+        'UPDATE tenants SET store_name = $1, store_url = $2, access_token = $3, category = $4 WHERE store_id = $5',
         [
           store_name || existingTenant.store_name,
           store_url || existingTenant.store_url,
@@ -139,7 +142,7 @@ router.post('/mock-register', async (req, res) => {
       console.log(`[Auth Mock] Updated tenant: ${store_id}`);
     } else {
       await dbRun(
-        'INSERT INTO tenants (store_id, store_name, store_url, access_token, category, quiz_config) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO tenants (store_id, store_name, store_url, access_token, category, quiz_config) VALUES ($1, $2, $3, $4, $5, $6)',
         [
           store_id,
           store_name || `Tienda Mock ${store_id}`,
@@ -158,6 +161,9 @@ router.post('/mock-register', async (req, res) => {
       );
       console.log(`[Auth Mock] Registered new tenant: ${store_id}`);
     }
+
+    // Invalidate cache for this tenant
+    widgetConfigCache.del(store_id);
 
     // Try script injection if not dummy token
     if (access_token && !access_token.includes('mock')) {
@@ -200,9 +206,12 @@ router.post('/webhooks/charge', async (req, res) => {
     }
 
     await dbRun(
-      'UPDATE tenants SET billing_status = ? WHERE store_id = ?',
+      'UPDATE tenants SET billing_status = $1 WHERE store_id = $2',
       [billingStatus, String(store_id)]
     );
+
+    // Invalidate cache for this tenant
+    widgetConfigCache.del(String(store_id));
 
     console.log(`[Webhook] Updated billing_status to: ${billingStatus} for store: ${store_id}`);
     res.json({ success: true, billing_status: billingStatus });

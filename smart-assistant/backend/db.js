@@ -1,41 +1,40 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
+const NodeCache = require('node-cache');
 
-const dbPath = process.env.DATABASE_PATH || path.resolve(__dirname, 'smart_assistant.db');
-const db = new sqlite3.Database(dbPath, (err) => {
+const connectionString = process.env.DATABASE_URL || 'postgresql://smart_user:smart_password@localhost:5432/smart_assistant';
+const pool = new Pool({
+  connectionString
+});
+
+// Setup Config Cache (5 minutes TTL)
+const widgetConfigCache = new NodeCache({ stdTTL: 300 });
+
+// Test connection on startup
+pool.query('SELECT NOW()', (err, res) => {
   if (err) {
-    console.error('Error opening database:', err.message);
+    console.error('Error connecting to PostgreSQL:', err.message);
   } else {
-    console.log('Connected to SQLite database at:', dbPath);
+    console.log('Connected to PostgreSQL database at:', connectionString.replace(/:[^:@/]+@/, ':***@'));
   }
 });
 
-// Helper functions for async/await
-const dbRun = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(query, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+// Helper functions for async/await in pg
+const dbRun = async (query, params = []) => {
+  const res = await pool.query(query, params);
+  return {
+    lastID: res.rows && res.rows[0] ? res.rows[0].id : null,
+    changes: res.rowCount
+  };
 };
 
-const dbAll = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+const dbAll = async (query, params = []) => {
+  const res = await pool.query(query, params);
+  return res.rows;
 };
 
-const dbGet = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(query, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+const dbGet = async (query, params = []) => {
+  const res = await pool.query(query, params);
+  return res.rows[0] || null;
 };
 
 // Initial data to seed for test/demo stores
@@ -214,15 +213,18 @@ const initDatabase = async () => {
         category TEXT DEFAULT 'vinos',
         quiz_config TEXT,
         billing_status TEXT DEFAULT 'active',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     // Check and add billing_status column if it doesn't exist
     try {
-      const tableInfo = await dbAll("PRAGMA table_info(tenants)");
-      const hasBillingStatus = tableInfo.some(col => col.name === 'billing_status');
-      if (!hasBillingStatus) {
+      const colCheck = await dbGet(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'tenants' AND column_name = 'billing_status'
+      `);
+      if (!colCheck) {
         await dbRun("ALTER TABLE tenants ADD COLUMN billing_status TEXT DEFAULT 'active'");
         console.log("Added billing_status column to tenants table.");
       }
@@ -233,7 +235,7 @@ const initDatabase = async () => {
     // 2. Create products table
     await dbRun(`
       CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         store_id TEXT,
         tiendanube_id TEXT,
         variant_id TEXT,
@@ -251,7 +253,7 @@ const initDatabase = async () => {
     // 3. Create product_tags table
     await dbRun(`
       CREATE TABLE IF NOT EXISTS product_tags (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         store_id TEXT,
         product_id INTEGER,
         tag_key TEXT NOT NULL,
@@ -266,12 +268,13 @@ const initDatabase = async () => {
 
     // 4. Seeding Demo Stores
     const tenantsCount = await dbGet('SELECT COUNT(*) as count FROM tenants');
-    if (tenantsCount.count === 0) {
+    if (Number(tenantsCount.count) === 0) {
       console.log('Seeding demo tenants...');
       for (const t of seedTenants) {
         await dbRun(
           `INSERT INTO tenants (store_id, store_name, store_url, access_token, category, quiz_config)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (store_id) DO NOTHING`,
           [t.store_id, t.store_name, t.store_url, t.access_token, t.category, t.quiz_config]
         );
       }
@@ -279,23 +282,32 @@ const initDatabase = async () => {
       console.log('Seeding demo products and tags...');
       for (const p of seedProducts) {
         // Insert product
-        await dbRun(
+        const result = await dbGet(
           `INSERT INTO products (store_id, name, description, image_url, price, sku, variant_id, canonical_url)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (store_id, sku) DO NOTHING
+           RETURNING id`,
           [p.store_id, p.name, p.description, p.image_url, p.price, p.sku, p.variant_id, p.canonical_url]
         );
 
-        // Get inserted product ID
-        const insertedProd = await dbGet('SELECT id FROM products WHERE store_id = ? AND sku = ?', [p.store_id, p.sku]);
-        const product_id = insertedProd.id;
+        let product_id;
+        if (result) {
+          product_id = result.id;
+        } else {
+          const existing = await dbGet('SELECT id FROM products WHERE store_id = $1 AND sku = $2', [p.store_id, p.sku]);
+          product_id = existing ? existing.id : null;
+        }
 
-        // Insert tags
-        for (const t of p.tags) {
-          await dbRun(
-            `INSERT INTO product_tags (store_id, product_id, tag_key, tag_value)
-             VALUES (?, ?, ?, ?)`,
-            [p.store_id, product_id, t.key, t.value]
-          );
+        if (product_id) {
+          // Insert tags
+          for (const t of p.tags) {
+            await dbRun(
+              `INSERT INTO product_tags (store_id, product_id, tag_key, tag_value)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (store_id, product_id, tag_key, tag_value) DO NOTHING`,
+              [p.store_id, product_id, t.key, t.value]
+            );
+          }
         }
       }
       console.log('Database seeded successfully.');
@@ -309,9 +321,10 @@ const initDatabase = async () => {
 };
 
 module.exports = {
-  db,
+  db: pool,
   dbRun,
   dbAll,
   dbGet,
-  initDatabase
+  initDatabase,
+  widgetConfigCache
 };
